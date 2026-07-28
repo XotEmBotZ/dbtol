@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  oracle-db-1:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: oracle-db-1
+    environment:
+      - ORACLE_PASSWORD=OraclePassword123
+    volumes:
+      - oracle-db-1-data:/opt/oracle/oradata
+      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD", "/opt/oracle/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    restart: always
+
+  oracle-db-2:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: oracle-db-2
+    environment:
+      - ORACLE_PASSWORD=OraclePassword123
+    volumes:
+      - oracle-db-2-data:/opt/oracle/oradata
+      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD", "/opt/oracle/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    restart: always
+
+  oracle-db-3:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: oracle-db-3
+    environment:
+      - ORACLE_PASSWORD=OraclePassword123
+    volumes:
+      - oracle-db-3-data:/opt/oracle/oradata
+      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD", "/opt/oracle/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    restart: always
+
+  ords-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.ords
+    container_name: ords-master
+    ports:
+      - "8080:8080"
+    environment:
+      - ORACLE_PASSWORD=OraclePassword123
+      - ORDS_PUBLIC_USER_PASSWORD=OrdsPublicPassword123
+    volumes:
+      - ords-config-data:/etc/ords/config
+    depends_on:
+      oracle-db-1:
+        condition: service_healthy
+      oracle-db-2:
+        condition: service_healthy
+      oracle-db-3:
+        condition: service_healthy
+    restart: always
+
+volumes:
+  oracle-db-1-data:
+  oracle-db-2-data:
+  oracle-db-3-data:
+  ords-config-data:

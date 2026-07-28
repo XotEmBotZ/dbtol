@@ -1,0 +1,28 @@
+FROM eclipse-temurin:17-jre
+
+# Install curl and unzip to download and extract ORDS
+RUN apt-get update && \
+    apt-get install -y curl unzip && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set environment variables for ORDS
+ENV ORDS_HOME=/opt/ords
+ENV ORDS_CONFIG=/etc/ords/config
+ENV PATH=$ORDS_HOME/bin:$PATH
+
+# Create directories and download/extract ORDS
+RUN mkdir -p $ORDS_HOME $ORDS_CONFIG && \
+    curl -o /tmp/ords-latest.zip -L https://download.oracle.com/otn_software/java/ords/ords-latest.zip && \
+    unzip /tmp/ords-latest.zip -d $ORDS_HOME && \
+    rm /tmp/ords-latest.zip
+
+WORKDIR $ORDS_HOME
+
+# Expose the default ORDS jetty standalone port
+EXPOSE 8080
+
+# Copy and set permissions on entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
