@@ -8,10 +8,7 @@ services:
       INIT_SGA_SIZE: "1500M"
       INIT_PGA_SIZE: "500M"
     ports:
-      - target: 1521
-        published: 1521
-        protocol: tcp
-        mode: host
+      - "1521:1521"
     networks:
       - admin_internal_net
     logging:
