@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   oracle-db:
-    image: gvenzl/oracle-xe:latest
+    image: gvenzl/oracle-free:23-slim-faststart
     environment:
       ORACLE_PASSWORD: "LabDbPassword2026"
       INIT_SGA_SIZE: "1500M"
@@ -20,7 +20,7 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "/opt/oracle/checkDBStatus.sh"]
+      test: ["CMD", "/opt/oracle/healthcheck.sh"]
       interval: 15s
       timeout: 10s
       retries: 10

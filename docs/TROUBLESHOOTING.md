@@ -144,10 +144,10 @@ graph LR
 
 ---
 
-## 4. Container Health Check Failures (`/opt/oracle/checkDBStatus.sh`)
+## 4. Container Health Check Failures (`/opt/oracle/healthcheck.sh`)
 
-> [!CAUTION]
-> Oracle Database initialization is CPU and I/O intensive. If system resources are overly constrained or disk write speeds are slow, the internal health check script `/opt/oracle/checkDBStatus.sh` may time out before initialization finishes.
+> [!NOTE]
+> Oracle Database initialization is CPU and I/O intensive. If system resources are overly constrained or disk write speeds are slow, the internal health check script `/opt/oracle/healthcheck.sh` may time out before initialization finishes.
 
 ### Symptoms
 - Container status remains `starting` or becomes `unhealthy`.

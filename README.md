@@ -84,6 +84,7 @@ graph TD
 | ├── [PHASE1_MASTER_SETUP.md](file:///home/xotem/projects/vitdbms/docs/PHASE1_MASTER_SETUP.md) | Markdown | Detailed guide for initializing the Swarm Master node and local registry. |
 | ├── [PHASE2_STUDENT_SETUP.md](file:///home/xotem/projects/vitdbms/docs/PHASE2_STUDENT_SETUP.md) | Markdown | Step-by-step guide for configuring student nodes and desktop shortcuts. |
 | ├── [PHASE3_OPERATIONS.md](file:///home/xotem/projects/vitdbms/docs/PHASE3_OPERATIONS.md) | Markdown | Operational procedures for stack deployment, grading loops, and lifecycle management. |
+| ├── [POST_JOIN_COMMANDS.md](file:///home/xotem/projects/vitdbms/docs/POST_JOIN_COMMANDS.md) | Markdown | Command checklist for post-swarm-init & join operations, monitoring, and verification. |
 | ├── [RESTRICTED_POWERSHELL_GUIDE.md](file:///home/xotem/projects/vitdbms/docs/RESTRICTED_POWERSHELL_GUIDE.md) | Markdown | Guide for operating the entire lab on Windows machines with blocked PowerShell script execution policies. |
 | ├── [TROUBLESHOOTING.md](file:///home/xotem/projects/vitdbms/docs/TROUBLESHOOTING.md) | Markdown | In-depth troubleshooting guide for port conflicts, Swarm firewall issues, overlay networking, health checks, local registry pulls, `ORA-*` errors, and PowerShell execution blocks. |
 | └── [COMPARISON_MATRIX.md](file:///home/xotem/projects/vitdbms/docs/COMPARISON_MATRIX.md) | Markdown | Technical operational matrix comparing Standard Unhardened Setup vs Hardened Swarm Lab Setup across 6 core security and UX dimensions. |
