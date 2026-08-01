@@ -59,11 +59,7 @@ Standard Docker Swarm ingress routing meshes publish ports globally across all n
 
 ```yaml
 ports:
-  - target: 1521
-    published: 1521
-    protocol: tcp
-    mode: host
-    host_ip: 127.0.0.1
+  - "127.0.0.1:1521:1521"
 ```
 
 * **Why Cross-PC Access Over Physical LAN is Impossible**:

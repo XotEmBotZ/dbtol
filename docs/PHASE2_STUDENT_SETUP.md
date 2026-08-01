@@ -43,6 +43,16 @@ Remove-LocalGroupMember -Group "docker-users" -Member "LAB\Domain Users" -ErrorA
 Remove-LocalGroupMember -Group "docker-users" -Member "Student" -ErrorAction SilentlyContinue
 ```
 
+#### Command Prompt (`cmd.exe`) Privilege Audit Command:
+
+```cmd
+:: Audit local group membership
+net localgroup docker-users
+
+:: Remove student user account from local docker-users group
+net localgroup docker-users student /delete
+```
+
 #### Enforcing via GPO (Restricted Groups):
 
 1. Open **Group Policy Management Console (`gpmc.msc`)**.
@@ -56,6 +66,24 @@ Remove-LocalGroupMember -Group "docker-users" -Member "Student" -ErrorAction Sil
 
 Each student PC joins the Swarm as a worker node. The Docker Swarm Manager will automatically provision exactly one Oracle XE container to each student PC upon joining due to the `mode: global` stack definition.
 
+### Automated 1-Click Student Setup Scripts
+
+* **Linux / Git Bash**: [student-setup.sh](file:///home/xotem/projects/vitdbms/scripts/student-setup.sh)
+  ```bash
+  ./scripts/student-setup.sh "<SWARM_WORKER_JOIN_TOKEN>" "192.168.1.10:2377" "student"
+  ```
+* **Windows (PowerShell Admin)**: [student-setup.ps1](file:///home/xotem/projects/vitdbms/scripts/student-setup.ps1)
+  ```powershell
+  .\scripts\student-setup.ps1 -SwarmToken "<SWARM_WORKER_JOIN_TOKEN>" -ManagerAddr "192.168.1.10:2377" -StudentUser "student"
+  ```
+* **Windows (Command Prompt / CMD .bat - No PowerShell)**: [student-setup.bat](file:///home/xotem/projects/vitdbms/scripts/student-setup.bat)
+  ```cmd
+  scripts\student-setup.bat <SWARM_WORKER_JOIN_TOKEN> 192.168.1.10:2377 student
+  ```
+
+> [!NOTE]
+> If PowerShell script execution is restricted on student PCs, use `student-setup.bat` or refer to the comprehensive [RESTRICTED_POWERSHELL_GUIDE.md](file:///home/xotem/projects/vitdbms/docs/RESTRICTED_POWERSHELL_GUIDE.md).
+
 ### Manual Join Command
 
 On each student PC (run via elevated prompt or startup script):
@@ -65,23 +93,16 @@ On each student PC (run via elevated prompt or startup script):
 docker swarm join --token SWMTKN-1-49mgw7p5b... 192.168.1.10:2377
 ```
 
-### Automated Join via Startup Task (PowerShell)
+### Automated Join via Startup Task (CMD / Batch)
 
-Deploy a scheduled task via GPO that executes at computer startup:
+Deploy a scheduled task or GPO startup script (`join-swarm.bat`) that executes at computer startup:
 
-```powershell
-$MasterIP = "192.168.1.10"
-$Token = "SWMTKN-1-49mgw7p5b..."
-
-# Check if node is already part of a swarm
-$SwarmState = (docker info --format '{{.Swarm.LocalNodeState}}')
-
-if ($SwarmState -ne "active") {
-    Write-Host "Joining Swarm Cluster..." -ForegroundColor Yellow
-    docker swarm join --token $Token "$($MasterIP):2377"
-} else {
-    Write-Host "Node is already active in Swarm." -ForegroundColor Green
-}
+```cmd
+@echo off
+for /f "tokens=*" %%i in ('docker info --format "{{.Swarm.LocalNodeState}}" 2^>nul') do set SWARM_STATE=%%i
+if not "%SWARM_STATE%"=="active" (
+    docker swarm join --token SWMTKN-1-49mgw7p5b... 192.168.1.10:2377
+)
 ```
 
 ---
@@ -106,9 +127,48 @@ Start in:       C:\Users\Public\Documents
 Icon:           C:\oracle\instantclient\sqlplus.exe (or custom Oracle icon)
 ```
 
-### Automated Shortcut Creation via PowerShell GPO Script
+### Deployment Method A: VBScript Helper Script (`create_shortcut.vbs` - No PowerShell)
 
-Deploy this script across all lab PCs to place `SQLPlus.lnk` on the Public Desktop (`C:\Users\Public\Desktop`), making it accessible to any logged-in student:
+Execute standard VBScript via CMD:
+
+```cmd
+:: Create temporary VBScript script to build desktop shortcut
+echo Set WshShell = CreateObject("WScript.Shell") > create_shortcut.vbs
+echo Set Shortcut = WshShell.CreateShortcut("C:\Users\Public\Desktop\SQLPlus.lnk") >> create_shortcut.vbs
+echo Shortcut.TargetPath = "C:\oracle\instantclient\sqlplus.exe" >> create_shortcut.vbs
+echo Shortcut.Arguments = "student/LabDbPassword2026@localhost:1521/XEPDB1" >> create_shortcut.vbs
+echo Shortcut.WorkingDirectory = "C:\Users\Public\Documents" >> create_shortcut.vbs
+echo Shortcut.Description = "Connect to local Oracle Database XE" >> create_shortcut.vbs
+echo Shortcut.Save >> create_shortcut.vbs
+
+cscript //nologo create_shortcut.vbs
+del create_shortcut.vbs
+```
+
+### Deployment Method B: Native GPO Shortcut Policy (Domain Mass Deployment)
+
+1. Open **Group Policy Management Console (`gpmc.msc`)**.
+2. Navigate to `Computer Configuration` -> `Preferences` -> `Windows Settings` -> `Shortcuts`.
+3. Right-click **Shortcuts** -> **New** -> **Shortcut**.
+4. Configure Properties:
+   * **Action**: `Create`
+   * **Name**: `SQLPlus - Oracle Lab DB`
+   * **Target Type**: `FileSystem Object`
+   * **Location**: `All Users Desktop`
+   * **Target Path**: `C:\oracle\instantclient\sqlplus.exe`
+   * **Arguments**: `student/LabDbPassword2026@localhost:1521/XEPDB1`
+   * **Working Directory**: `C:\Users\Public\Documents`
+
+### Deployment Method C: Manual Windows GUI Setup
+
+1. Right-click on Desktop -> **New** -> **Shortcut**.
+2. Location: `C:\oracle\instantclient\sqlplus.exe student/LabDbPassword2026@localhost:1521/XEPDB1`
+3. Shortcut Name: `SQLPlus - Oracle Lab DB`
+4. Set **Start in** property to `C:\Users\Public\Documents`.
+
+### Deployment Method D: Automated Shortcut Creation via PowerShell GPO Script
+
+Deploy this script across all lab PCs to place `SQLPlus.lnk` on the Public Desktop (`C:\Users\Public\Desktop`):
 
 ```powershell
 $TargetExe = "C:\oracle\instantclient\sqlplus.exe"
@@ -126,3 +186,4 @@ $Shortcut.Save()
 
 > [!NOTE]
 > When a student double-clicks `SQLPlus.lnk`, SQL*Plus opens immediately connected to their dedicated container database instance running locally on `127.0.0.1:1521`.
+

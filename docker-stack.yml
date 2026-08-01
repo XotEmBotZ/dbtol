@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   oracle-db:
-    image: 192.168.1.10:5000/oracle-xe:latest
+    image: gvenzl/oracle-xe:latest
     environment:
       ORACLE_PASSWORD: "LabDbPassword2026"
       INIT_SGA_SIZE: "1500M"
@@ -12,7 +12,6 @@ services:
         published: 1521
         protocol: tcp
         mode: host
-        host_ip: 127.0.0.1
     networks:
       - admin_internal_net
     logging:

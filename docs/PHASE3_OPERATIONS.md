@@ -24,13 +24,29 @@ This document covers day-to-day lab operations, stack deployment, cluster health
 
 At the start of a lab session or course term, deploy the Oracle XE stack from the Master PC.
 
-### Stack Deployment Command
+### Stack Deployment Commands
 
-From the directory containing `docker-stack.yml` on the Master PC:
+From the directory containing `docker-stack.yml` on the Master PC, deploy the stack using your preferred shell interface:
 
-```bash
-docker stack deploy -c docker-stack.yml lab
-```
+* **Linux / Git Bash Script**: [deploy-stack.sh](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.sh)
+  ```bash
+  ./scripts/deploy-stack.sh "lab" "docker-stack.yml"
+  ```
+* **Windows (PowerShell)**: [deploy-stack.ps1](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.ps1)
+  ```powershell
+  .\scripts\deploy-stack.ps1 -StackName "lab" -StackFile "docker-stack.yml"
+  ```
+* **Windows (Command Prompt / CMD .bat - No PowerShell)**: [deploy-stack.bat](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.bat)
+  ```cmd
+  scripts\deploy-stack.bat lab docker-stack.yml
+  ```
+* **Direct Docker CLI Command**:
+  ```bash
+  docker stack deploy -c docker-stack.yml lab
+  ```
+
+> [!NOTE]
+> If PowerShell is restricted on the Master PC, run `deploy-stack.bat` or refer to [RESTRICTED_POWERSHELL_GUIDE.md](file:///home/xotem/projects/vitdbms/docs/RESTRICTED_POWERSHELL_GUIDE.md).
 
 ### What Happens During Deployment
 
@@ -84,7 +100,22 @@ docker service logs lab_oracle-db --tail 50 --raw
 
 The Master PC can launch an ephemeral container attached to `admin_internal_net` to discover container IPs and run verification or grading queries without exposing any ports on the student PCs.
 
-### Automated Batch Grading Script (`batch_grade.sh`)
+### Automated Batch Execution Scripts
+
+* **Linux / Git Bash Script**: [run-batch-admin.sh](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.sh)
+  ```bash
+  ./scripts/run-batch-admin.sh "lab_oracle-db" "admin_internal_net" "SELECT instance_name, status FROM v\$instance;" "LabDbPassword2026"
+  ```
+* **Windows (PowerShell)**: [run-batch-admin.ps1](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.ps1)
+  ```powershell
+  .\scripts\run-batch-admin.ps1 -ServiceName "lab_oracle-db" -NetworkName "admin_internal_net" -SqlCmd "SELECT count(*) FROM user_tables;"
+  ```
+* **Windows (Command Prompt / CMD .bat - No PowerShell)**: [run-batch-admin.bat](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.bat)
+  ```cmd
+  scripts\run-batch-admin.bat lab_oracle-db admin_internal_net "SELECT count(*) FROM user_tables;" LabDbPassword2026 gvenzl/oracle-xe
+  ```
+
+### Automated Batch Grading Script (`batch_grade.sh` Native Example)
 
 Save this script on the Master PC to run automated checks against all active student databases:
 

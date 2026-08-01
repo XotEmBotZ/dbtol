@@ -69,16 +69,23 @@ graph TD
 | **`scripts/` Directory** | Script Suite | Automation scripts for Master node initialization, Student PC setup, and stack deployment. |
 | ├── [master-setup.sh](file:///home/xotem/projects/vitdbms/scripts/master-setup.sh) | Bash Script | Initializes Docker Swarm Manager, creates overlay network, starts local registry on port 5000, and pushes seed image. |
 | ├── [master-setup.ps1](file:///home/xotem/projects/vitdbms/scripts/master-setup.ps1) | PowerShell | Windows equivalent for Master node initialization. |
+| ├── [master-setup.bat](file:///home/xotem/projects/vitdbms/scripts/master-setup.bat) | CMD Batch | Windows CMD equivalent for Master node setup without PowerShell. |
 | ├── [student-setup.sh](file:///home/xotem/projects/vitdbms/scripts/student-setup.sh) | Bash Script | Audits user groups, joins student node to Swarm cluster, and creates transparent Desktop SQL*Plus shortcut. |
 | ├── [student-setup.ps1](file:///home/xotem/projects/vitdbms/scripts/student-setup.ps1) | PowerShell | Windows equivalent for Student PC automated setup. |
+| ├── [student-setup.bat](file:///home/xotem/projects/vitdbms/scripts/student-setup.bat) | CMD Batch | Windows CMD equivalent for Student PC setup without PowerShell. |
 | ├── [deploy-stack.sh](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.sh) | Bash Script | Deploys/updates the [docker-stack.yml](file:///home/xotem/projects/vitdbms/docker-stack.yml) stack on Swarm and monitors fleet health. |
-| └── [deploy-stack.ps1](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.ps1) | PowerShell | Windows equivalent for Swarm stack deployment. |
+| ├── [deploy-stack.ps1](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.ps1) | PowerShell | Windows equivalent for Swarm stack deployment. |
+| ├── [deploy-stack.bat](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.bat) | CMD Batch | Windows CMD equivalent for stack deployment without PowerShell. |
+| ├── [run-batch-admin.sh](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.sh) | Bash Script | Runs automated administrative SQL queries across all running container tasks. |
+| ├── [run-batch-admin.ps1](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.ps1) | PowerShell | Windows equivalent for batch administrative queries. |
+| └── [run-batch-admin.bat](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.bat) | CMD Batch | Windows CMD equivalent for batch administrative queries without PowerShell. |
 | **`docs/` Directory** | Documentation | Comprehensive operational documentation and troubleshooting guides. |
 | ├── [ARCHITECTURE.md](file:///home/xotem/projects/vitdbms/docs/ARCHITECTURE.md) | Markdown | Deep dive system architecture specification for Swarm Global Services. |
 | ├── [PHASE1_MASTER_SETUP.md](file:///home/xotem/projects/vitdbms/docs/PHASE1_MASTER_SETUP.md) | Markdown | Detailed guide for initializing the Swarm Master node and local registry. |
 | ├── [PHASE2_STUDENT_SETUP.md](file:///home/xotem/projects/vitdbms/docs/PHASE2_STUDENT_SETUP.md) | Markdown | Step-by-step guide for configuring student nodes and desktop shortcuts. |
 | ├── [PHASE3_OPERATIONS.md](file:///home/xotem/projects/vitdbms/docs/PHASE3_OPERATIONS.md) | Markdown | Operational procedures for stack deployment, grading loops, and lifecycle management. |
-| ├── [TROUBLESHOOTING.md](file:///home/xotem/projects/vitdbms/docs/TROUBLESHOOTING.md) | Markdown | In-depth troubleshooting guide for port conflicts, Swarm firewall issues, overlay networking, health checks, local registry pulls, and `ORA-*` error handling. |
+| ├── [RESTRICTED_POWERSHELL_GUIDE.md](file:///home/xotem/projects/vitdbms/docs/RESTRICTED_POWERSHELL_GUIDE.md) | Markdown | Guide for operating the entire lab on Windows machines with blocked PowerShell script execution policies. |
+| ├── [TROUBLESHOOTING.md](file:///home/xotem/projects/vitdbms/docs/TROUBLESHOOTING.md) | Markdown | In-depth troubleshooting guide for port conflicts, Swarm firewall issues, overlay networking, health checks, local registry pulls, `ORA-*` errors, and PowerShell execution blocks. |
 | └── [COMPARISON_MATRIX.md](file:///home/xotem/projects/vitdbms/docs/COMPARISON_MATRIX.md) | Markdown | Technical operational matrix comparing Standard Unhardened Setup vs Hardened Swarm Lab Setup across 6 core security and UX dimensions. |
 
 ---
@@ -93,7 +100,7 @@ graph TD
 #### Step 1: Master PC Initialization
 Run the initialization script on the Master PC to create the Swarm cluster and start the local image registry:
 
-- **Linux**:
+- **Linux / Git Bash**:
   ```bash
   chmod +x scripts/*.sh
   ./scripts/master-setup.sh "192.168.1.10" "oracle-xe:latest"
@@ -102,13 +109,17 @@ Run the initialization script on the Master PC to create the Swarm cluster and s
   ```powershell
   .\scripts\master-setup.ps1 -AdvertiseAddr "192.168.1.10" -SourceImage "oracle-xe:latest"
   ```
+- **Windows (CMD .bat - No PowerShell)**:
+  ```cmd
+  scripts\master-setup.bat 192.168.1.10 oracle-xe:latest
+  ```
 
 *Note down the Worker Join Token printed in the command output.*
 
 #### Step 2: Student PC Setup
 On each Student PC (or executed via lab deployment tools like Ansible/SCCM):
 
-- **Linux**:
+- **Linux / Git Bash**:
   ```bash
   ./scripts/student-setup.sh "<SWARM_WORKER_JOIN_TOKEN>" "192.168.1.10:2377" "student"
   ```
@@ -116,19 +127,27 @@ On each Student PC (or executed via lab deployment tools like Ansible/SCCM):
   ```powershell
   .\scripts\student-setup.ps1 -SwarmToken "<SWARM_WORKER_JOIN_TOKEN>" -ManagerAddr "192.168.1.10:2377" -StudentUser "student"
   ```
+- **Windows (CMD .bat - No PowerShell)**:
+  ```cmd
+  scripts\student-setup.bat <SWARM_WORKER_JOIN_TOKEN> 192.168.1.10:2377 student
+  ```
 
 This joins the machine to the Swarm cluster, removes the student user from control groups, and creates a **1-Click SQL*Plus Shortcut** on the Desktop.
 
 #### Step 3: Deploy the Lab Stack
 From the Master PC, deploy the global stack definition to all 100+ student nodes simultaneously:
 
-- **Linux**:
+- **Linux / Git Bash**:
   ```bash
   ./scripts/deploy-stack.sh "lab" "docker-stack.yml"
   ```
 - **Windows (PowerShell)**:
   ```powershell
   .\scripts\deploy-stack.ps1 -StackName "lab" -StackFile "docker-stack.yml"
+  ```
+- **Windows (CMD .bat - No PowerShell)**:
+  ```cmd
+  scripts\deploy-stack.bat lab docker-stack.yml
   ```
 
 #### Step 4: Verify Deployment

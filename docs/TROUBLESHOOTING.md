@@ -14,6 +14,7 @@ This guide provides comprehensive diagnostic steps, root cause analysis, and res
 | **Healthcheck Timeout** | Container status `unhealthy` / restarting | RAM limit < 2048M causing OOM or slow host disk I/O | Increase memory limit in [docker-stack.yml](file:///home/xotem/projects/vitdbms/docker-stack.yml) |
 | **Registry Pull Error** | `http: server gave HTTP response to HTTPS client` | Local Master registry uses plain HTTP on port 5000 | Add `"insecure-registries"` to `/etc/docker/daemon.json` |
 | **SQL*Plus Connection** | `ORA-12541: TNS:no listener` / `ORA-12514` | Database starting up or incorrect service name (`XEPDB1`) | Verify container health and check service name |
+| **PowerShell Restricted** | `PSSecurityException` / `ExecutionPolicy Restricted` | PowerShell script execution blocked by GPO / system security policy | Run `.bat` scripts ([student-setup.bat](file:///home/xotem/projects/vitdbms/scripts/student-setup.bat)) or VBScript helper |
 
 ---
 
@@ -267,6 +268,53 @@ When students execute SQL*Plus or double-click the pre-configured launcher short
 
 ---
 
+## 7. PowerShell Script Execution Blocked (`PSSecurityException` / `ExecutionPolicy Restricted`)
+
+> [!WARNING]
+> In managed lab environments, Windows execution policies or AppLocker/GPO restrict `.ps1` PowerShell scripts, displaying:
+> `File C:\scripts\student-setup.ps1 cannot be loaded because running scripts is disabled on this system.`
+
+### Root Cause
+The Windows PowerShell execution policy is set to `Restricted` or regulated via Active Directory Group Policy Objects (GPO).
+
+### Resolution Paths
+
+#### Path 1: Execute Native Command Prompt Batch Script (`.bat`) - Recommended
+Use the CMD `.bat` equivalents provided in `scripts/`:
+- **Master Node**: Use [master-setup.bat](file:///home/xotem/projects/vitdbms/scripts/master-setup.bat)
+- **Student Node**: Use [student-setup.bat](file:///home/xotem/projects/vitdbms/scripts/student-setup.bat)
+- **Stack Deploy**: Use [deploy-stack.bat](file:///home/xotem/projects/vitdbms/scripts/deploy-stack.bat)
+- **Batch Admin**: Use [run-batch-admin.bat](file:///home/xotem/projects/vitdbms/scripts/run-batch-admin.bat)
+
+```cmd
+:: Run in elevated Command Prompt (cmd.exe)
+scripts\student-setup.bat <SWARM_WORKER_JOIN_TOKEN> 192.168.1.10:2377 student
+```
+
+#### Path 2: Shortcut Creation via VBScript Helper (`create_shortcut.vbs`)
+Run VBScript helper via `cscript.exe` (unaffected by PowerShell ExecutionPolicy):
+
+```cmd
+echo Set WshShell = CreateObject("WScript.Shell") > %TEMP%\sc.vbs
+echo Set S = WshShell.CreateShortcut("C:\Users\Public\Desktop\SQLPlus.lnk") >> %TEMP%\sc.vbs
+echo S.TargetPath = "C:\oracle\instantclient\sqlplus.exe" >> %TEMP%\sc.vbs
+echo S.Arguments = "student/LabDbPassword2026@localhost:1521/XEPDB1" >> %TEMP%\sc.vbs
+echo S.Save >> %TEMP%\sc.vbs
+cscript //nologo %TEMP%\sc.vbs
+```
+
+#### Path 3: Process-Scoped Execution Policy Bypass (If Permitted)
+Bypass execution policy strictly for the active session without altering system-wide registry settings:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\student-setup.ps1 -SwarmToken "<SWARM_JOIN_TOKEN>"
+```
+
+> [!TIP]
+> For complete instructions on operating without PowerShell, see [RESTRICTED_POWERSHELL_GUIDE.md](file:///home/xotem/projects/vitdbms/docs/RESTRICTED_POWERSHELL_GUIDE.md).
+
+---
+
 ## Technical Support Workflow
 
 ```mermaid
@@ -274,7 +322,9 @@ flowchart TD
     Start[Issue Reported] --> CheckDocker{Is Docker Running?}
     CheckDocker -- No --> StartDocker[Start Docker Daemon / Desktop]
     CheckDocker -- Yes --> CheckSwarm{Node in Swarm?}
-    CheckSwarm -- No --> RunStudentSetup[Execute student-setup.sh / .ps1]
+    CheckSwarm -- No --> CheckPS{Is PowerShell Blocked?}
+    CheckPS -- Yes --> RunBatSetup[Execute student-setup.bat / VBScript helper]
+    CheckPS -- No --> RunStudentSetup[Execute student-setup.sh / .ps1]
     CheckSwarm -- Yes --> CheckContainer{Container Healthy?}
     CheckContainer -- No --> CheckHealth[Inspect docker logs & health status]
     CheckContainer -- Yes --> CheckSQL[Test SQL*Plus to 127.0.0.1:1521/XEPDB1]
@@ -284,6 +334,7 @@ flowchart TD
     FixPassword --> Resolved[Issue Resolved]
     FixService --> Resolved
     FixListener --> Resolved
+    RunBatSetup --> Resolved
     RunStudentSetup --> Resolved
     StartDocker --> Resolved
     CheckHealth --> Resolved

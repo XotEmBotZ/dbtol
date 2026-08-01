@@ -13,6 +13,29 @@ Before initializing the Master PC:
 
 ---
 
+## Automated 1-Click Master Initialization Scripts
+
+For automated setup across Linux, standard PowerShell, or restricted Windows CMD environments, run the corresponding initialization script from the repository root:
+
+* **Linux / Git Bash**: [master-setup.sh](file:///home/xotem/projects/vitdbms/scripts/master-setup.sh)
+  ```bash
+  chmod +x scripts/master-setup.sh
+  ./scripts/master-setup.sh "192.168.1.10" "oracle-xe:latest"
+  ```
+* **Windows (PowerShell Admin)**: [master-setup.ps1](file:///home/xotem/projects/vitdbms/scripts/master-setup.ps1)
+  ```powershell
+  .\scripts\master-setup.ps1 -AdvertiseAddr "192.168.1.10" -SourceImage "oracle-xe:latest"
+  ```
+* **Windows (Command Prompt / CMD .bat - No PowerShell)**: [master-setup.bat](file:///home/xotem/projects/vitdbms/scripts/master-setup.bat)
+  ```cmd
+  scripts\master-setup.bat 192.168.1.10 oracle-xe:latest
+  ```
+
+> [!NOTE]
+> If PowerShell script execution is restricted on your Windows host (`ExecutionPolicy Restricted`), use `master-setup.bat` or refer to the comprehensive [RESTRICTED_POWERSHELL_GUIDE.md](file:///home/xotem/projects/vitdbms/docs/RESTRICTED_POWERSHELL_GUIDE.md).
+
+---
+
 ## Step 1: Initialize Swarm Manager
 
 Initialize the Docker node as the Swarm Manager by advertising its static LAN IP address.
