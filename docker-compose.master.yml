@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  faculty-dashboard:
+    build:
+      context: ./faculty-dashboard
+      dockerfile: Dockerfile
+    container_name: faculty-dashboard
+    restart: always
+    ports:
+      # Expose dashboard on Master node port 3000
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - oracle_cluster_net
+
+networks:
+  oracle_cluster_net:
+    external: true
