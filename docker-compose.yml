@@ -1,77 +1,36 @@
 version: '3.8'
 
 services:
-  oracle-db-1:
+  oracle-db:
     image: gvenzl/oracle-free:23-slim-faststart
-    container_name: oracle-db-1
-    environment:
-      - ORACLE_PASSWORD=OraclePassword123
-    volumes:
-      - oracle-db-1-data:/opt/oracle/oradata
-      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
-    healthcheck:
-      test: ["CMD", "/opt/oracle/healthcheck.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
+    container_name: oracle-db
     restart: always
-
-  oracle-db-2:
-    image: gvenzl/oracle-free:23-slim-faststart
-    container_name: oracle-db-2
-    environment:
-      - ORACLE_PASSWORD=OraclePassword123
-    volumes:
-      - oracle-db-2-data:/opt/oracle/oradata
-      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
-    healthcheck:
-      test: ["CMD", "/opt/oracle/healthcheck.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
-    restart: always
-
-  oracle-db-3:
-    image: gvenzl/oracle-free:23-slim-faststart
-    container_name: oracle-db-3
-    environment:
-      - ORACLE_PASSWORD=OraclePassword123
-    volumes:
-      - oracle-db-3-data:/opt/oracle/oradata
-      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
-    healthcheck:
-      test: ["CMD", "/opt/oracle/healthcheck.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
-    restart: always
-
-  ords-master:
-    build:
-      context: .
-      dockerfile: Dockerfile.ords
-    container_name: ords-master
     ports:
-      - "8080:8080"
+      # Expose port 1521 strictly on the host's localhost (127.0.0.1)
+      - "127.0.0.1:1521:1521"
     environment:
-      - ORACLE_PASSWORD=OraclePassword123
-      - ORDS_PUBLIC_USER_PASSWORD=OrdsPublicPassword123
+      # Mandatory: Sets password for SYS, SYSTEM, and PDBADMIN
+      - ORACLE_PASSWORD=LabDbPassword2026
+      # Default pluggable database name (defaults to FREEPDB1 if omitted)
+      - ORACLE_DATABASE=FREEPDB1
+      # Optional: automatically create a standard application/student user on startup
+      - APP_USER=student
+      - APP_USER_PASSWORD=StudentPassword123
     volumes:
-      - ords-config-data:/etc/ords/config
-    depends_on:
-      oracle-db-1:
-        condition: service_healthy
-      oracle-db-2:
-        condition: service_healthy
-      oracle-db-3:
-        condition: service_healthy
-    restart: always
+      - oracle-data:/opt/oracle/oradata
+      - ./init-db.sh:/container-entrypoint-startdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD", "/opt/oracle/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - oracle_cluster_net
 
 volumes:
-  oracle-db-1-data:
-  oracle-db-2-data:
-  oracle-db-3-data:
-  ords-config-data:
+  oracle-data:
+
+networks:
+  oracle_cluster_net:
+    external: true
