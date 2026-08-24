@@ -81,7 +81,7 @@ Get-Process -Id (Get-NetTCPConnection -LocalPort 1521).OwningProcess
 ### Required Docker Swarm Firewall Ports
 - **`2377/tcp`**: Swarm cluster management communications.
 - **`7946/tcp` & `7946/udp`**: Node-to-node control network communication.
-- **`4789/udp`**: Overlay network data traffic (VXLAN).
+- **`47890/udp`**: Overlay network data traffic (custom VXLAN data-path port via `--data-path-port 47890`).
 
 ### Diagnostic Steps
 1. **Verify Master IP Reachability**:
@@ -94,12 +94,17 @@ Get-Process -Id (Get-NetTCPConnection -LocalPort 1521).OwningProcess
 
 ### Resolution
 
+#### Initialize Swarm with Custom Data-Path Port
+```bash
+docker swarm init --advertise-addr <MASTER_IP> --data-path-port 47890
+```
+
 #### Configure Firewall on Master PC (Linux / UFW)
 ```bash
 sudo ufw allow 2377/tcp comment 'Docker Swarm Management'
 sudo ufw allow 7946/tcp comment 'Docker Swarm Node Comm'
 sudo ufw allow 7946/udp comment 'Docker Swarm Node Comm'
-sudo ufw allow 4789/udp comment 'Docker Swarm Overlay Traffic'
+sudo ufw allow 47890/udp comment 'Docker Swarm Overlay Traffic'
 sudo ufw reload
 ```
 
@@ -108,7 +113,7 @@ sudo ufw reload
 New-NetFirewallRule -DisplayName "Docker Swarm Management (2377)" -Direction Inbound -Protocol TCP -LocalPort 2377 -Action Allow
 New-NetFirewallRule -DisplayName "Docker Swarm Node Comm TCP (7946)" -Direction Inbound -Protocol TCP -LocalPort 7946 -Action Allow
 New-NetFirewallRule -DisplayName "Docker Swarm Node Comm UDP (7946)" -Direction Inbound -Protocol UDP -LocalPort 7946 -Action Allow
-New-NetFirewallRule -DisplayName "Docker Swarm Overlay UDP (4789)" -Direction Inbound -Protocol UDP -LocalPort 4789 -Action Allow
+New-NetFirewallRule -DisplayName "Docker Swarm Overlay UDP (47890)" -Direction Inbound -Protocol UDP -LocalPort 47890 -Action Allow
 ```
 
 #### Re-Join Swarm Cluster on Student PC

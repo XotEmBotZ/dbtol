@@ -10,7 +10,7 @@ NETWORK_NAME="${1:-oracle_cluster_net}"
 SWARM_STATE=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || echo "inactive")
 if [ "${SWARM_STATE}" != "active" ]; then
     echo "[ERROR] Docker Swarm is not initialized/active on this node."
-    echo "[INFO] Run 'docker swarm init --advertise-addr <MANAGER_IP>' on the manager node first."
+    echo "[INFO] Run 'docker swarm init --advertise-addr <MANAGER_IP> --data-path-port 47890' on the manager node first."
     exit 1
 fi
 

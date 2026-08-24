@@ -44,8 +44,8 @@ graph TD
 ### 1. Master Node Setup (Faculty Machine)
 
 ```bash
-# 1. Initialize Docker Swarm
-docker swarm init --advertise-addr <MASTER_IP>
+# 1. Initialize Docker Swarm with custom data path port for overlay network traffic
+docker swarm init --advertise-addr <MASTER_IP> --data-path-port 47890
 
 # 2. Create the attachable overlay network
 ./scripts/create-network.sh
