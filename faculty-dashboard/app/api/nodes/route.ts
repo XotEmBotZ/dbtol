@@ -4,12 +4,15 @@ import http from "http";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-interface DiscoveredNode {
+export interface DiscoveredNode {
   id: string;
   hostname: string;
   role: "manager" | "worker";
   ip: string;
   status: "ready" | "down" | "unknown";
+  dbContainerName?: string;
+  dbIp?: string;
+  dbStatus?: "online" | "offline" | "unknown";
 }
 
 function queryDockerSocket(path: string): Promise<any> {
@@ -54,8 +57,9 @@ export async function GET() {
   const nodes: DiscoveredNode[] = [];
 
   try {
-    // 1. Query Swarm Nodes
+    // 1. Query Swarm Nodes & Tasks
     const swarmNodes = await queryDockerSocket("/v1.43/nodes");
+    const tasks = await queryDockerSocket("/v1.43/tasks");
 
     if (Array.isArray(swarmNodes)) {
       for (const n of swarmNodes) {
@@ -64,40 +68,44 @@ export async function GET() {
         const ip = n.Status?.Addr || "127.0.0.1";
         const state = n.Status?.State || "unknown";
 
+        let dbIp = undefined;
+        let dbStatus: "online" | "offline" | "unknown" = "offline";
+        let dbContainerName = undefined;
+
+        if (Array.isArray(tasks)) {
+          const nodeTasks = tasks.filter((t) => t.NodeID === n.ID && t.Status?.State === "running");
+          for (const task of nodeTasks) {
+            if (task.NetworksAttachments) {
+              const attach = task.NetworksAttachments.find((na: any) =>
+                na.Network && na.Network.Spec && na.Network.Spec.Name === "oracle_cluster_net"
+              );
+              
+              if (attach && attach.Addresses && attach.Addresses.length > 0) {
+                dbIp = attach.Addresses[0].split("/")[0];
+                dbStatus = "online";
+                dbContainerName = "oracle-db";
+                break;
+              }
+            }
+          }
+        }
+
         nodes.push({
           id: n.ID,
           hostname,
           role,
           ip,
           status: state === "ready" ? "ready" : "down",
+          dbIp,
+          dbStatus,
+          dbContainerName
         });
-      }
-    }
-
-    // 2. Query Containers attached to overlay network if available
-    const networkInfo = await queryDockerSocket("/v1.43/networks/oracle_cluster_net");
-    if (networkInfo?.Containers) {
-      for (const [cId, container] of Object.entries<any>(networkInfo.Containers)) {
-        const cIp = container.IPv4Address ? container.IPv4Address.split("/")[0] : "";
-        const cName = container.Name || cId.substring(0, 12);
-        
-        // If not already in nodes list
-        if (cIp && !nodes.some((n) => n.ip === cIp)) {
-          nodes.push({
-            id: cId,
-            hostname: cName,
-            role: "worker",
-            ip: cIp,
-            status: "ready",
-          });
-        }
       }
     }
   } catch (err) {
     // socket query fallback
   }
 
-  // If no nodes discovered from socket (e.g. standalone test mode), provide standard localhost preset
   if (nodes.length === 0) {
     nodes.push({
       id: "local",
@@ -105,6 +113,9 @@ export async function GET() {
       role: "manager",
       ip: "127.0.0.1",
       status: "ready",
+      dbIp: "127.0.0.1",
+      dbStatus: "online",
+      dbContainerName: "local-oracle"
     });
   }
 
