@@ -12,11 +12,11 @@ async function post(body: Record<string, unknown>): Promise<Response> {
 
 export async function pingOracle(
   config: OracleConfig
-): Promise<{ ok: boolean; connectString?: string; error?: string }> {
+): Promise<{ ok: boolean; connectString?: string; data?: any[]; error?: string }> {
   const res = await post({ action: "ping", config });
   const data = await res.json();
   if (data.success) {
-    return { ok: true, connectString: data.connectString };
+    return { ok: true, connectString: data.connectString, data: data.data };
   }
   return { ok: false, error: data.error };
 }
@@ -24,7 +24,7 @@ export async function pingOracle(
 export async function runQuery(
   config: OracleConfig,
   sql: string
-): Promise<{ ok: boolean; result?: QueryResult; error?: string }> {
+): Promise<{ ok: boolean; result?: QueryResult; error?: string; code?: number | string }> {
   const res = await post({ action: "query", config, sql });
   const data = await res.json();
   if (data.success) {
@@ -38,7 +38,7 @@ export async function runQuery(
       },
     };
   }
-  return { ok: false, error: data.error };
+  return { ok: false, error: data.error, code: data.code };
 }
 
 export async function getTables(
