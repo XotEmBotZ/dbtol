@@ -6,8 +6,8 @@ services:
     container_name: oracle-db
     restart: always
     ports:
-      # Expose port 1521 strictly on the host's localhost (127.0.0.1)
-      - "127.0.0.1:1521:1521"
+      # Expose port 1522 strictly on the host's localhost (127.0.0.1)
+      - "127.0.0.1:1522:1522"
     environment:
       # Mandatory: Sets password for SYS, SYSTEM, and PDBADMIN
       - ORACLE_PASSWORD=LabDbPassword2026
