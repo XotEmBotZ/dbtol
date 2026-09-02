@@ -1,6 +1,7 @@
 "use client";
 
-import { Wifi, WifiOff, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Wifi, Loader2, Edit, Check, X } from "lucide-react";
 import type { OracleConfig } from "@/lib/types";
 
 interface HeaderProps {
@@ -9,6 +10,7 @@ interface HeaderProps {
   onApplyPreset: (role: "sys" | "student") => void;
   onPingNode: () => void;
   onRescan: () => void;
+  onUpdateConfig: (patch: Partial<OracleConfig>) => void;
 }
 
 export function Header({
@@ -16,8 +18,46 @@ export function Header({
   loading,
   onApplyPreset,
   onPingNode,
+  onRescan,
+  onUpdateConfig,
 }: HeaderProps) {
   const connectTarget = `${config.host}:${config.port}/${config.serviceName}`;
+
+  const [editing, setEditing] = useState(false);
+  const [tmp, setTmp] = useState({
+    host: config.host || "",
+    port: String(config.port || 1522),
+    user: config.user || "",
+    password: config.password || "",
+    serviceName: config.serviceName || "",
+  });
+
+  function openEditor() {
+    setTmp({
+      host: config.host || "",
+      port: String(config.port || 1522),
+      user: config.user || "",
+      password: config.password || "",
+      serviceName: config.serviceName || "",
+    });
+    setEditing(true);
+  }
+
+  function cancel() {
+    setEditing(false);
+  }
+
+  function save() {
+    const patch: Partial<OracleConfig> = {
+      host: tmp.host.trim(),
+      port: Number(tmp.port) || 1522,
+      user: tmp.user,
+      password: tmp.password,
+      serviceName: tmp.serviceName || config.serviceName,
+    };
+    onUpdateConfig(patch);
+    setEditing(false);
+  }
 
   return (
     <header className="shrink-0 bg-white text-black border-b border-neutral-300">
@@ -63,25 +103,80 @@ export function Header({
             </button>
           </div>
 
-          {/* Connection target */}
+          {/* Connection target or editor */}
           <div className="flex items-center px-4 border-r border-neutral-300 gap-2">
-            <span className="text-[10px] text-neutral-500 font-mono uppercase">Target:</span>
-            <span className="text-[10px] font-mono text-neutral-900 font-bold">{connectTarget}</span>
+            {!editing ? (
+              <>
+                <span className="text-[10px] text-neutral-500 font-mono uppercase">Target:</span>
+                <span className="text-[10px] font-mono text-neutral-900 font-bold">{connectTarget}</span>
+                <button
+                  title="Edit connection"
+                  onClick={openEditor}
+                  className="ml-3 p-1 text-neutral-600 hover:text-black"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  className="text-[11px] font-mono border px-2 py-1 rounded w-36"
+                  value={tmp.host}
+                  onChange={(e) => setTmp((s) => ({ ...s, host: e.target.value }))}
+                  placeholder="host"
+                />
+                <input
+                  className="text-[11px] font-mono border px-2 py-1 rounded w-20"
+                  value={tmp.port}
+                  onChange={(e) => setTmp((s) => ({ ...s, port: e.target.value }))}
+                  placeholder="port"
+                />
+                <input
+                  className="text-[11px] font-mono border px-2 py-1 rounded w-28"
+                  value={tmp.user}
+                  onChange={(e) => setTmp((s) => ({ ...s, user: e.target.value }))}
+                  placeholder="user"
+                />
+                <input
+                  className="text-[11px] font-mono border px-2 py-1 rounded w-36"
+                  value={tmp.password}
+                  onChange={(e) => setTmp((s) => ({ ...s, password: e.target.value }))}
+                  placeholder="password"
+                  type="password"
+                />
+                <button onClick={save} className="p-1 text-green-700" title="Save">
+                  <Check className="w-4 h-4" />
+                </button>
+                <button onClick={cancel} className="p-1 text-neutral-600" title="Cancel">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Ping */}
-          <button
-            onClick={onPingNode}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 text-xs font-bold uppercase font-mono text-neutral-600 hover:text-black hover:bg-neutral-50 disabled:opacity-40 transition-colors"
-          >
-            {loading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Wifi className="w-3.5 h-3.5" />
-            )}
-            <span className="text-[10px]">Ping Node</span>
-          </button>
+          {/* Ping and rescan */}
+          <div className="flex items-center">
+            <button
+              onClick={onPingNode}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 text-xs font-bold uppercase font-mono text-neutral-600 hover:text-black hover:bg-neutral-50 disabled:opacity-40 transition-colors"
+            >
+              {loading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Wifi className="w-3.5 h-3.5" />
+              )}
+              <span className="text-[10px]">Ping Node</span>
+            </button>
+
+            <button
+              onClick={onRescan}
+              className="px-3 text-[10px] text-neutral-600 hover:text-black"
+              title="Rescan cluster"
+            >
+              Rescan
+            </button>
+          </div>
         </div>
       </div>
     </header>
