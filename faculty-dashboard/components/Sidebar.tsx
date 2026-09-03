@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, LayoutDashboard, Activity, Terminal, Database, Users, GraduationCap } from "lucide-react";
+import { RefreshCw, Activity, Terminal, Database, Users, GraduationCap } from "lucide-react";
 import type { DiscoveredNode, ActiveView } from "@/lib/types";
 import { NodeCard } from "@/components/NodeCard";
 
@@ -20,7 +20,6 @@ const NAV_ITEMS: {
   icon: React.ElementType;
   disabled?: boolean;
 }[] = [
-  { id: "overview", label: "OVERVIEW", icon: LayoutDashboard },
   { id: "health", label: "HEALTH", icon: Activity },
   { id: "schema", label: "SCHEMA", icon: Database },
   { id: "sql", label: "SQL RUNNER", icon: Terminal },

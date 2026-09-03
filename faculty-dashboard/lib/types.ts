@@ -68,6 +68,30 @@ export interface TableSchemaDetail {
   indexes: TableIndexDetail[];
 }
 
+export interface BenchmarkTableRule {
+  tableName: string;
+  columns: {
+    name: string;
+    type: string;
+    nullable: boolean;
+  }[];
+  constraints: {
+    name: string;
+    type: string;
+    column?: string;
+    rTable?: string;
+    condition?: string;
+  }[];
+  requireData: boolean;
+}
+
+export interface BenchmarkConfig {
+  name: string;
+  sourceNode: string;
+  capturedAt: string;
+  tables: BenchmarkTableRule[];
+}
+
 export interface OracleSession {
   SID: number;
   "SERIAL#": number;
@@ -81,7 +105,7 @@ export interface OracleSession {
   SQL_TEXT?: string;
 }
 
-export type ActiveView = "overview" | "health" | "sql" | "schema" | "sessions" | "evaluation";
+export type ActiveView = "health" | "sql" | "schema" | "sessions" | "evaluation";
 
 export interface StatusMessage {
   text: string;

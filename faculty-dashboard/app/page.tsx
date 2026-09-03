@@ -10,7 +10,6 @@ import { SQLRunner } from "@/components/SQLRunner";
 import { SchemaExplorer } from "@/components/SchemaExplorer";
 import { ActiveSessions } from "@/components/ActiveSessions";
 import { StatusBar } from "@/components/StatusBar";
-import { Overview } from "@/components/Overview";
 import { DatabaseHealth } from "@/components/DatabaseHealth";
 import { Evaluation } from "@/components/Evaluation";
 
@@ -31,7 +30,7 @@ export default function FacultyDashboard() {
   });
 
   // ── Navigation ───────────────────────────────────────────────────────────────
-  const [activeView, setActiveView] = useState<ActiveView>("overview");
+  const [activeView, setActiveView] = useState<ActiveView>("health");
 
   // ── Global status (ping, rescan, node select) ────────────────────────────────
   const [globalStatus, setGlobalStatus] = useState<StatusMessage | null>(null);
@@ -250,14 +249,15 @@ export default function FacultyDashboard() {
           {/* Workspace panel */}
           <div className="h-full overflow-hidden bg-white">
             <div className="h-full overflow-auto bg-white border-r border-neutral-200">
-              {activeView === "overview" && (
-                <Overview nodes={nodes} />
-              )}
               {activeView === "health" && (
                 <DatabaseHealth config={config} node={nodes.find(n => n.id === selectedNodeId)} />
               )}
               {activeView === "evaluation" && (
-                <Evaluation config={config} node={nodes.find(n => n.id === selectedNodeId)} />
+                <Evaluation
+                  config={config}
+                  node={nodes.find(n => n.id === selectedNodeId)}
+                  nodes={nodes}
+                />
               )}
               {activeView === "sql" && (
                 <SQLRunner
