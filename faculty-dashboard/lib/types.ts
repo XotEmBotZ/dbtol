@@ -15,6 +15,7 @@ export interface DiscoveredNode {
   status: "ready" | "down" | "unknown";
   dbContainerName?: string;
   dbIp?: string;
+  dbPort?: number;
   dbStatus?: "online" | "offline" | "unknown";
 }
 
@@ -27,9 +28,44 @@ export interface QueryResult {
 
 export interface SchemaTable {
   TABLE_NAME: string;
-  NUM_ROWS: number | null;
+  NUM_ROWS?: number | null;
   TABLESPACE_NAME?: string;
-  STATUS: string;
+  STATUS?: string;
+}
+
+export interface TableColumnDetail {
+  COLUMN_NAME: string;
+  DATA_TYPE: string;
+  DATA_LENGTH: number;
+  DATA_PRECISION?: number;
+  DATA_SCALE?: number;
+  NULLABLE: string;
+  DATA_DEFAULT?: string;
+}
+
+export interface TableConstraintDetail {
+  CONSTRAINT_NAME: string;
+  CONSTRAINT_TYPE: string;
+  COLUMN_NAME?: string;
+  SEARCH_CONDITION?: string;
+  R_TABLE_NAME?: string;
+  R_CONSTRAINT_NAME?: string;
+  DELETE_RULE?: string;
+  STATUS?: string;
+}
+
+export interface TableIndexDetail {
+  INDEX_NAME: string;
+  UNIQUENESS: string;
+  COLUMN_NAME: string;
+  COLUMN_POSITION: number;
+}
+
+export interface TableSchemaDetail {
+  tableName: string;
+  columns: TableColumnDetail[];
+  constraints: TableConstraintDetail[];
+  indexes: TableIndexDetail[];
 }
 
 export interface OracleSession {
@@ -45,7 +81,7 @@ export interface OracleSession {
   SQL_TEXT?: string;
 }
 
-export type ActiveView = "overview" | "health" | "sql" | "schema" | "sessions" | "evaluation" | "rescue" | "audit";
+export type ActiveView = "overview" | "health" | "sql" | "schema" | "sessions" | "evaluation";
 
 export interface StatusMessage {
   text: string;

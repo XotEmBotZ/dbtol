@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   let connection: oracledb.Connection | null = null;
   try {
     const body = await req.json();
-    const { action, config, sql, sid, serial, newPassword } = body;
+    const { action, config, sql, sid, serial, newPassword, tableName } = body;
 
     if (!config || !config.host) {
       return NextResponse.json({ success: false, error: "Host address required" }, { status: 400 });
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     if (action === "get-tables") {
       const targetUser = (config.user === "SYS" || config.asSysdba) ? "STUDENT" : config.user.toUpperCase();
       const result = await connection.execute(
-        `SELECT table_name, num_rows, tablespace_name, status 
+        `SELECT table_name, tablespace_name 
          FROM all_tables 
          WHERE owner = :owner 
          ORDER BY table_name`,
@@ -88,6 +88,59 @@ export async function POST(req: NextRequest) {
         success: true,
         tables: result.rows || [],
         targetUser,
+      });
+    }
+
+    if (action === "get-table-schema") {
+      if (!tableName) {
+        return NextResponse.json({ success: false, error: "Table name is required" }, { status: 400 });
+      }
+      const targetUser = (config.user === "SYS" || config.asSysdba) ? "STUDENT" : config.user.toUpperCase();
+      const targetTable = tableName.toUpperCase();
+
+      const [colsRes, consRes, idxRes] = await Promise.all([
+        connection.execute(
+          `SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
+           FROM all_tab_columns
+           WHERE owner = :owner AND table_name = :tname
+           ORDER BY column_id`,
+          [targetUser, targetTable]
+        ),
+        connection.execute(
+          `SELECT 
+             c.constraint_name,
+             c.constraint_type,
+             c.search_condition_vc as search_condition,
+             c.r_constraint_name,
+             r.table_name as r_table_name,
+             cc.column_name,
+             c.delete_rule,
+             c.status
+           FROM all_constraints c
+           LEFT JOIN all_cons_columns cc ON c.owner = cc.owner AND c.constraint_name = cc.constraint_name
+           LEFT JOIN all_constraints r ON c.r_owner = r.owner AND c.r_constraint_name = r.constraint_name
+           WHERE c.owner = :owner AND c.table_name = :tname
+           ORDER BY c.constraint_type, c.constraint_name, cc.position`,
+          [targetUser, targetTable]
+        ),
+        connection.execute(
+          `SELECT i.index_name, i.uniqueness, ic.column_name, ic.column_position
+           FROM all_indexes i
+           JOIN all_ind_columns ic ON i.owner = ic.index_owner AND i.index_name = ic.index_name
+           WHERE i.owner = :owner AND i.table_name = :tname
+           ORDER BY i.index_name, ic.column_position`,
+          [targetUser, targetTable]
+        ),
+      ]);
+
+      return NextResponse.json({
+        success: true,
+        schema: {
+          tableName: targetTable,
+          columns: colsRes.rows || [],
+          constraints: consRes.rows || [],
+          indexes: idxRes.rows || [],
+        },
       });
     }
 

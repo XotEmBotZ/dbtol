@@ -1,182 +1,112 @@
 import { NextResponse } from "next/server";
-import http from "http";
+import net from "net";
+import os from "os";
+import type { DiscoveredNode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export interface DiscoveredNode {
-  id: string;
-  hostname: string;
-  role: "manager" | "worker";
-  ip: string;
-  status: "ready" | "down" | "unknown";
-  dbContainerName?: string;
-  dbIp?: string;
-  dbStatus?: "online" | "offline" | "unknown";
+const TARGET_PORTS = [1521, 1522];
+const PROBE_TIMEOUT_MS = 350;
+
+function checkPort(host: string, port: number, timeout = PROBE_TIMEOUT_MS): Promise<number | null> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port }, () => {
+      socket.destroy();
+      resolve(port);
+    });
+    socket.setTimeout(timeout);
+    socket.on("error", () => resolve(null));
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(null);
+    });
+  });
 }
 
-function queryDockerSocket(path: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const options = {
-      socketPath: "/var/run/docker.sock",
-      path: path,
-      method: "GET",
-      headers: { Host: "localhost" },
-    };
+function getSubnetPrefixes(): { subnetPrefix: string; localIps: Set<string> } {
+  const localIps = new Set<string>();
+  const prefixes = new Set<string>();
 
-    const req = http.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(JSON.parse(data));
-          } else {
-            resolve(null);
-          }
-        } catch {
-          resolve(null);
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name] || []) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        localIps.add(iface.address);
+        const parts = iface.address.split(".");
+        if (parts.length === 4) {
+          prefixes.add(parts.slice(0, 3).join("."));
         }
-      });
-    });
+      }
+    }
+  }
 
-    req.on("error", (err) => {
-      resolve(null);
-    });
+  // Ensure default overlay subnet 10.0.1 is always probed
+  prefixes.add("10.0.1");
 
-    req.setTimeout(2000, () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
-  });
+  return {
+    subnetPrefix: Array.from(prefixes)[0] || "10.0.1",
+    localIps,
+  };
 }
 
 export async function GET() {
   const nodes: DiscoveredNode[] = [];
+  const { subnetPrefix, localIps } = getSubnetPrefixes();
 
   try {
-    // 1. Query Swarm Nodes, Tasks, and oracle_cluster_net network
-    const [swarmNodes, tasks, clusterNet] = await Promise.all([
-      queryDockerSocket("/v1.43/nodes"),
-      queryDockerSocket("/v1.43/tasks"),
-      queryDockerSocket("/v1.43/networks/oracle_cluster_net"),
-    ]);
+    const probeTasks: Promise<{ ip: string; port: number } | null>[] = [];
 
-    // Extract all DB containers attached to oracle_cluster_net
-    const dbContainers: { id: string; name: string; ip: string }[] = [];
-    if (clusterNet && clusterNet.Containers && typeof clusterNet.Containers === "object") {
-      for (const [cId, cData] of Object.entries<any>(clusterNet.Containers)) {
-        const rawName = cData.Name || "";
-        const cleanName = rawName.replace(/^\//, "");
-        
-        // Filter out dashboard, load balancer, and internal endpoints
-        if (
-          cleanName.toLowerCase().includes("dashboard") ||
-          cleanName.toLowerCase().includes("endpoint") ||
-          cleanName.startsWith("lb-") ||
-          cId.startsWith("lb-")
-        ) {
-          continue;
-        }
+    for (let i = 1; i <= 254; i++) {
+      const ip = `${subnetPrefix}.${i}`;
+      // Skip the dashboard container's own IP
+      if (localIps.has(ip)) continue;
 
-        const ip = cData.IPv4Address ? cData.IPv4Address.split("/")[0] : undefined;
-        if (ip) {
-          dbContainers.push({
-            id: cId,
-            name: cleanName || "oracle-db",
-            ip,
-          });
-        }
-      }
-    }
-
-    const assignedContainerIds = new Set<string>();
-
-    // 2. Process Swarm nodes if present
-    if (Array.isArray(swarmNodes) && swarmNodes.length > 0) {
-      for (const n of swarmNodes) {
-        const hostname = n.Description?.Hostname || n.ID?.substring(0, 12) || "node";
-        const role = n.Spec?.Role || "worker";
-        const ip = n.Status?.Addr || "127.0.0.1";
-        const state = n.Status?.State || "unknown";
-
-        let dbIp: string | undefined = undefined;
-        let dbStatus: "online" | "offline" | "unknown" = "offline";
-        let dbContainerName: string | undefined = undefined;
-
-        // Check Swarm tasks first
-        if (Array.isArray(tasks)) {
-          const nodeTasks = tasks.filter((t) => t.NodeID === n.ID && t.Status?.State === "running");
-          for (const task of nodeTasks) {
-            if (task.NetworksAttachments) {
-              const attach = task.NetworksAttachments.find((na: any) =>
-                na.Network && na.Network.Spec && na.Network.Spec.Name === "oracle_cluster_net"
-              );
-              if (attach && attach.Addresses && attach.Addresses.length > 0) {
-                dbIp = attach.Addresses[0].split("/")[0];
-                dbStatus = "online";
-                dbContainerName = "oracle-db";
-                break;
-              }
+      probeTasks.push(
+        (async () => {
+          for (const port of TARGET_PORTS) {
+            const openPort = await checkPort(ip, port);
+            if (openPort) {
+              return { ip, port: openPort };
             }
           }
-        }
-
-        // If no swarm task DB found, match unassigned compose container from oracle_cluster_net
-        if (!dbIp && dbContainers.length > 0) {
-          const unassigned = dbContainers.find((c) => !assignedContainerIds.has(c.id));
-          if (unassigned) {
-            dbIp = unassigned.ip;
-            dbStatus = "online";
-            dbContainerName = unassigned.name;
-            assignedContainerIds.add(unassigned.id);
-          }
-        }
-
-        nodes.push({
-          id: n.ID,
-          hostname,
-          role,
-          ip,
-          status: state === "ready" ? "ready" : "down",
-          dbIp,
-          dbStatus,
-          dbContainerName,
-        });
-      }
+          return null;
+        })()
+      );
     }
 
-    // 3. Add any remaining compose DB containers on oracle_cluster_net as standalone discovered nodes
-    for (const c of dbContainers) {
-      if (!assignedContainerIds.has(c.id)) {
-        nodes.push({
-          id: c.id.substring(0, 12),
-          hostname: c.name.toUpperCase(),
-          role: "worker",
-          ip: c.ip,
-          status: "ready",
-          dbIp: c.ip,
-          dbStatus: "online",
-          dbContainerName: c.name,
-        });
-        assignedContainerIds.add(c.id);
-      }
+    const liveTargets = (await Promise.all(probeTasks)).filter(
+      (item): item is { ip: string; port: number } => item !== null
+    );
+
+    for (const target of liveTargets) {
+      const lastOctet = target.ip.split(".")[3] || "0";
+      nodes.push({
+        id: `node-${target.ip.replace(/\./g, "-")}`,
+        hostname: `STUDENT_DB_${lastOctet.padStart(2, "0")}`,
+        role: "worker",
+        ip: target.ip,
+        status: "ready",
+        dbIp: target.ip,
+        dbPort: target.port,
+        dbStatus: "online",
+        dbContainerName: `oracle-db-${lastOctet}`,
+      });
     }
   } catch (err) {
-    // socket query fallback
+    console.error("Subnet sweep error:", err);
   }
 
-  // 4. Default fallback if nothing discovered
+  // Fallback if no remote DB instances responded
   if (nodes.length === 0) {
     nodes.push({
-      id: "local",
+      id: "local-node",
       hostname: "LOCAL_HOST",
       role: "manager",
       ip: "127.0.0.1",
       status: "ready",
       dbIp: "127.0.0.1",
+      dbPort: 1522,
       dbStatus: "online",
       dbContainerName: "local-oracle",
     });

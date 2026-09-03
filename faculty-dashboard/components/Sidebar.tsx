@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, LayoutDashboard, Activity, Terminal, Database, Users, GraduationCap, Wrench, Shield } from "lucide-react";
+import { RefreshCw, LayoutDashboard, Activity, Terminal, Database, Users, GraduationCap } from "lucide-react";
 import type { DiscoveredNode, ActiveView } from "@/lib/types";
 import { NodeCard } from "@/components/NodeCard";
 
@@ -26,8 +26,6 @@ const NAV_ITEMS: {
   { id: "sql", label: "SQL RUNNER", icon: Terminal },
   { id: "sessions", label: "SESSIONS", icon: Users },
   { id: "evaluation", label: "EVALUATION", icon: GraduationCap },
-  { id: "rescue", label: "RESCUE TOOLS", icon: Wrench },
-  { id: "audit", label: "AUDIT LOG", icon: Shield },
 ];
 
 export function Sidebar({

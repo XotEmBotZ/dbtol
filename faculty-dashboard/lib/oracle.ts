@@ -1,4 +1,4 @@
-import type { OracleConfig, QueryResult, SchemaTable, OracleSession } from "./types";
+import type { OracleConfig, QueryResult, SchemaTable, OracleSession, TableSchemaDetail } from "./types";
 
 const ORACLE_ENDPOINT = "/api/oracle";
 
@@ -48,6 +48,18 @@ export async function getTables(
   const data = await res.json();
   if (data.success) {
     return { ok: true, tables: data.tables as SchemaTable[], targetUser: data.targetUser };
+  }
+  return { ok: false, error: data.error };
+}
+
+export async function getTableSchema(
+  config: OracleConfig,
+  tableName: string
+): Promise<{ ok: boolean; schema?: TableSchemaDetail; error?: string }> {
+  const res = await post({ action: "get-table-schema", config, tableName });
+  const data = await res.json();
+  if (data.success) {
+    return { ok: true, schema: data.schema as TableSchemaDetail };
   }
   return { ok: false, error: data.error };
 }
