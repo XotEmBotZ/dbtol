@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import oracledb from "oracledb";
+import {
+  groupConstraintRows,
+  isOracleConstraintAction,
+  isSafeOracleIdentifier,
+  type ConstraintSchemaRow,
+} from "@/lib/schema-metadata";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -97,7 +103,7 @@ export async function POST(req: NextRequest) {
       }
       const targetUser = (config.user === "SYS" || config.asSysdba) ? "STUDENT" : config.user.toUpperCase();
       const targetTable = String(tableName).toUpperCase();
-      if (!/^[A-Z][A-Z0-9_$#]{0,127}$/.test(targetTable)) {
+      if (!isSafeOracleIdentifier(targetTable)) {
         return NextResponse.json({ success: false, error: "Invalid table name" }, { status: 400 });
       }
 
@@ -145,36 +151,14 @@ export async function POST(req: NextRequest) {
         ),
       ]);
 
-      const constraintsByName = new Map<string, Record<string, any>>();
-      for (const row of (consRes.rows || []) as Record<string, any>[]) {
-        let constraint = constraintsByName.get(row.CONSTRAINT_NAME);
-        if (!constraint) {
-          constraint = {
-            CONSTRAINT_NAME: row.CONSTRAINT_NAME,
-            CONSTRAINT_TYPE: row.CONSTRAINT_TYPE,
-            COLUMNS: [],
-            REFERENCED_COLUMNS: [],
-            SEARCH_CONDITION: row.SEARCH_CONDITION,
-            R_TABLE_NAME: row.R_TABLE_NAME,
-            R_CONSTRAINT_NAME: row.R_CONSTRAINT_NAME,
-            DELETE_RULE: row.DELETE_RULE,
-            STATUS: row.STATUS,
-            DEFERRABLE: row.DEFERRABLE,
-            DEFERRED: row.DEFERRED,
-            VALIDATED: row.VALIDATED,
-          };
-          constraintsByName.set(row.CONSTRAINT_NAME, constraint);
-        }
-        if (row.COLUMN_NAME) constraint.COLUMNS.push(row.COLUMN_NAME);
-        if (row.REFERENCED_COLUMN_NAME) constraint.REFERENCED_COLUMNS.push(row.REFERENCED_COLUMN_NAME);
-      }
+      const constraints = groupConstraintRows((consRes.rows || []) as ConstraintSchemaRow[]);
 
       return NextResponse.json({
         success: true,
         schema: {
           tableName: targetTable,
           columns: colsRes.rows || [],
-          constraints: Array.from(constraintsByName.values()),
+          constraints,
           indexes: idxRes.rows || [],
         },
       });
@@ -189,11 +173,10 @@ export async function POST(req: NextRequest) {
         : config.user.toUpperCase();
       const targetTable = String(tableName || "").toUpperCase();
       const targetConstraint = String(constraintName || "").toUpperCase();
-      const allowedActions = new Set(["ENABLE VALIDATE", "ENABLE NOVALIDATE", "DISABLE"]);
-      if (!/^[A-Z][A-Z0-9_$#]{0,127}$/.test(targetTable) || !/^[A-Z][A-Z0-9_$#]{0,127}$/.test(targetConstraint)) {
+      if (!isSafeOracleIdentifier(targetTable) || !isSafeOracleIdentifier(targetConstraint)) {
         return NextResponse.json({ success: false, error: "Invalid table or constraint name" }, { status: 400 });
       }
-      if (!allowedActions.has(constraintAction)) {
+      if (!isOracleConstraintAction(constraintAction)) {
         return NextResponse.json({ success: false, error: "Unsupported constraint action" }, { status: 400 });
       }
       const exists = await connection.execute(

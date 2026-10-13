@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { OracleConfig, DiscoveredNode, BenchmarkConfig, BenchmarkTableRule } from "@/lib/types";
 import { getTables, getTableSchema, runQuery } from "@/lib/oracle";
+import { columnDefinitionMismatches, constraintDefinitionMismatches } from "@/lib/schema-metadata";
 
 interface EvaluationProps {
   config: OracleConfig;
@@ -248,19 +249,7 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
         // 2b. Check Columns & Types
         for (const col of expectedTable.columns) {
           const targetCol = targetColMap.get(col.name.toUpperCase());
-          const mismatches: string[] = [];
-          if (targetCol) {
-            if (targetCol.DATA_TYPE.toUpperCase() !== col.type.toUpperCase()) mismatches.push("type");
-            if (targetCol.NULLABLE !== (col.nullable ? "Y" : "N")) mismatches.push("nullability");
-            if (col.dataLength !== undefined && targetCol.DATA_LENGTH !== col.dataLength) mismatches.push("byte length");
-            if (col.charLength !== undefined && targetCol.CHAR_LENGTH !== col.charLength) mismatches.push("character length");
-            if (col.charUsed !== undefined && targetCol.CHAR_USED !== col.charUsed) mismatches.push("BYTE/CHAR semantics");
-            if (col.precision !== undefined && (targetCol.DATA_PRECISION ?? null) !== col.precision) mismatches.push("precision");
-            if (col.scale !== undefined && (targetCol.DATA_SCALE ?? null) !== col.scale) mismatches.push("scale");
-            if (col.defaultValue !== undefined && (targetCol.DATA_DEFAULT || "").replace(/\s+/g, " ").trim() !== (col.defaultValue || "").replace(/\s+/g, " ").trim()) mismatches.push("default");
-            if (col.identity !== undefined && (targetCol.IDENTITY_COLUMN === "YES") !== col.identity) mismatches.push("identity");
-            if (col.virtual !== undefined && (targetCol.VIRTUAL_COLUMN === "YES") !== col.virtual) mismatches.push("virtual property");
-          }
+          const mismatches = targetCol ? columnDefinitionMismatches(col, targetCol) : [];
           const passed = !!targetCol && mismatches.length === 0;
           checks.push({
             category: "column",
@@ -281,7 +270,6 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
           let passed = false;
           let message = "";
           const expectedColumns = cons.columns?.length ? cons.columns : cons.column ? [cons.column] : [];
-          const normalize = (value?: string | null) => (value || "").replace(/\s+/g, " ").trim().toUpperCase();
           const targetConstraint = targetCons.find((candidate) => {
             const actualColumns = candidate.COLUMNS || (candidate.COLUMN_NAME ? [candidate.COLUMN_NAME] : []);
             return candidate.CONSTRAINT_TYPE === cons.type &&
@@ -292,22 +280,11 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
           if (!targetConstraint) {
             message = `Missing ${getConstraintLabel(cons.type)} on ${expectedColumns.join(", ") || tName}`;
           } else {
-            const actualReferenced = targetConstraint.REFERENCED_COLUMNS || [];
-            const expectedReferenced = cons.referencedColumns || [];
-            const matches =
-              (!cons.rTable || targetConstraint.R_TABLE_NAME?.toUpperCase() === cons.rTable.toUpperCase()) &&
-              (!expectedReferenced.length || actualReferenced.length === expectedReferenced.length &&
-                actualReferenced.every((column, i) => column.toUpperCase() === expectedReferenced[i].toUpperCase())) &&
-              (!cons.condition || normalize(targetConstraint.SEARCH_CONDITION) === normalize(cons.condition)) &&
-              (!cons.status || targetConstraint.STATUS === cons.status) &&
-              (!cons.validated || targetConstraint.VALIDATED === cons.validated) &&
-              (!cons.deferrable || targetConstraint.DEFERRABLE === cons.deferrable) &&
-              (!cons.deferred || targetConstraint.DEFERRED === cons.deferred) &&
-              (!cons.deleteRule || targetConstraint.DELETE_RULE === cons.deleteRule);
-            passed = matches;
-            message = matches
+            const mismatches = constraintDefinitionMismatches(cons, targetConstraint);
+            passed = mismatches.length === 0;
+            message = passed
               ? `Constraint verified: ${expectedColumns.join(", ") || tName}`
-              : `Constraint properties differ (state ${targetConstraint.STATUS}/${targetConstraint.VALIDATED})`;
+              : `Constraint properties differ: ${mismatches.join(", ")}`;
           }
 
           checks.push({
