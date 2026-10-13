@@ -37,21 +37,30 @@ export interface TableColumnDetail {
   COLUMN_NAME: string;
   DATA_TYPE: string;
   DATA_LENGTH: number;
+  CHAR_LENGTH?: number;
+  CHAR_USED?: "B" | "C" | string;
   DATA_PRECISION?: number;
   DATA_SCALE?: number;
   NULLABLE: string;
   DATA_DEFAULT?: string;
+  VIRTUAL_COLUMN?: "YES" | "NO" | string;
+  IDENTITY_COLUMN?: "YES" | "NO" | string;
 }
 
 export interface TableConstraintDetail {
   CONSTRAINT_NAME: string;
   CONSTRAINT_TYPE: string;
+  COLUMNS: string[];
+  REFERENCED_COLUMNS: string[];
   COLUMN_NAME?: string;
   SEARCH_CONDITION?: string;
   R_TABLE_NAME?: string;
   R_CONSTRAINT_NAME?: string;
   DELETE_RULE?: string;
   STATUS?: string;
+  DEFERRABLE?: string;
+  DEFERRED?: string;
+  VALIDATED?: string;
 }
 
 export interface TableIndexDetail {
@@ -74,13 +83,28 @@ export interface BenchmarkTableRule {
     name: string;
     type: string;
     nullable: boolean;
+    dataLength?: number;
+    charLength?: number;
+    charUsed?: string;
+    precision?: number | null;
+    scale?: number | null;
+    defaultValue?: string | null;
+    identity?: boolean;
+    virtual?: boolean;
   }[];
   constraints: {
     name: string;
     type: string;
     column?: string;
+    columns: string[];
     rTable?: string;
+    referencedColumns?: string[];
     condition?: string;
+    status?: string;
+    validated?: string;
+    deferrable?: string;
+    deferred?: string;
+    deleteRule?: string;
   }[];
   requireData: boolean;
 }

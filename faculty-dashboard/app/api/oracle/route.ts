@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   let connection: oracledb.Connection | null = null;
   try {
     const body = await req.json();
-    const { action, config, sql, sid, serial, newPassword, tableName } = body;
+    const { action, config, sql, sid, serial, newPassword, tableName, constraintName, constraintAction } = body;
 
     if (!config || !config.host) {
       return NextResponse.json({ success: false, error: "Host address required" }, { status: 400 });
@@ -96,12 +96,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Table name is required" }, { status: 400 });
       }
       const targetUser = (config.user === "SYS" || config.asSysdba) ? "STUDENT" : config.user.toUpperCase();
-      const targetTable = tableName.toUpperCase();
+      const targetTable = String(tableName).toUpperCase();
+      if (!/^[A-Z][A-Z0-9_$#]{0,127}$/.test(targetTable)) {
+        return NextResponse.json({ success: false, error: "Invalid table name" }, { status: 400 });
+      }
 
       const [colsRes, consRes, idxRes] = await Promise.all([
         connection.execute(
-          `SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
-           FROM all_tab_columns
+          `SELECT column_name, data_type, data_length, char_length, char_used,
+                  data_precision, data_scale, nullable, data_default,
+                  virtual_column, identity_column
+           FROM all_tab_cols
            WHERE owner = :owner AND table_name = :tname
            ORDER BY column_id`,
           [targetUser, targetTable]
@@ -114,11 +119,18 @@ export async function POST(req: NextRequest) {
              c.r_constraint_name,
              r.table_name as r_table_name,
              cc.column_name,
+             cc.position as column_position,
+             rcc.column_name as referenced_column_name,
              c.delete_rule,
-             c.status
+             c.status,
+             c.deferrable,
+             c.deferred,
+             c.validated
            FROM all_constraints c
            LEFT JOIN all_cons_columns cc ON c.owner = cc.owner AND c.constraint_name = cc.constraint_name
            LEFT JOIN all_constraints r ON c.r_owner = r.owner AND c.r_constraint_name = r.constraint_name
+           LEFT JOIN all_cons_columns rcc ON r.owner = rcc.owner
+             AND r.constraint_name = rcc.constraint_name AND rcc.position = cc.position
            WHERE c.owner = :owner AND c.table_name = :tname
            ORDER BY c.constraint_type, c.constraint_name, cc.position`,
           [targetUser, targetTable]
@@ -133,15 +145,69 @@ export async function POST(req: NextRequest) {
         ),
       ]);
 
+      const constraintsByName = new Map<string, Record<string, any>>();
+      for (const row of (consRes.rows || []) as Record<string, any>[]) {
+        let constraint = constraintsByName.get(row.CONSTRAINT_NAME);
+        if (!constraint) {
+          constraint = {
+            CONSTRAINT_NAME: row.CONSTRAINT_NAME,
+            CONSTRAINT_TYPE: row.CONSTRAINT_TYPE,
+            COLUMNS: [],
+            REFERENCED_COLUMNS: [],
+            SEARCH_CONDITION: row.SEARCH_CONDITION,
+            R_TABLE_NAME: row.R_TABLE_NAME,
+            R_CONSTRAINT_NAME: row.R_CONSTRAINT_NAME,
+            DELETE_RULE: row.DELETE_RULE,
+            STATUS: row.STATUS,
+            DEFERRABLE: row.DEFERRABLE,
+            DEFERRED: row.DEFERRED,
+            VALIDATED: row.VALIDATED,
+          };
+          constraintsByName.set(row.CONSTRAINT_NAME, constraint);
+        }
+        if (row.COLUMN_NAME) constraint.COLUMNS.push(row.COLUMN_NAME);
+        if (row.REFERENCED_COLUMN_NAME) constraint.REFERENCED_COLUMNS.push(row.REFERENCED_COLUMN_NAME);
+      }
+
       return NextResponse.json({
         success: true,
         schema: {
           tableName: targetTable,
           columns: colsRes.rows || [],
-          constraints: consRes.rows || [],
+          constraints: Array.from(constraintsByName.values()),
           indexes: idxRes.rows || [],
         },
       });
+    }
+
+    if (action === "update-constraint") {
+      if (!config.asSysdba && config.user?.toUpperCase() !== "SYS" && config.user?.toUpperCase() !== "SYSTEM") {
+        return NextResponse.json({ success: false, error: "Administrator credentials are required to change constraints" }, { status: 403 });
+      }
+      const targetUser = (config.user?.toUpperCase() === "SYS" || config.asSysdba)
+        ? "STUDENT"
+        : config.user.toUpperCase();
+      const targetTable = String(tableName || "").toUpperCase();
+      const targetConstraint = String(constraintName || "").toUpperCase();
+      const allowedActions = new Set(["ENABLE VALIDATE", "ENABLE NOVALIDATE", "DISABLE"]);
+      if (!/^[A-Z][A-Z0-9_$#]{0,127}$/.test(targetTable) || !/^[A-Z][A-Z0-9_$#]{0,127}$/.test(targetConstraint)) {
+        return NextResponse.json({ success: false, error: "Invalid table or constraint name" }, { status: 400 });
+      }
+      if (!allowedActions.has(constraintAction)) {
+        return NextResponse.json({ success: false, error: "Unsupported constraint action" }, { status: 400 });
+      }
+      const exists = await connection.execute(
+        `SELECT 1 FROM all_constraints
+         WHERE owner = :owner AND table_name = :tableName AND constraint_name = :constraintName`,
+        [targetUser, targetTable, targetConstraint],
+      );
+      if (!exists.rows?.length) {
+        return NextResponse.json({ success: false, error: "Constraint not found on the selected table" }, { status: 404 });
+      }
+      await connection.execute(
+        `ALTER TABLE "${targetUser}"."${targetTable}" ${constraintAction} CONSTRAINT "${targetConstraint}"`,
+      );
+      return NextResponse.json({ success: true, message: `${targetConstraint}: ${constraintAction}` });
     }
 
     if (action === "get-sessions") {

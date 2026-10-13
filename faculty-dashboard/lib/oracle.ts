@@ -64,6 +64,19 @@ export async function getTableSchema(
   return { ok: false, error: data.error };
 }
 
+export async function updateConstraint(
+  config: OracleConfig,
+  tableName: string,
+  constraintName: string,
+  constraintAction: "ENABLE VALIDATE" | "ENABLE NOVALIDATE" | "DISABLE"
+): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const res = await post({ action: "update-constraint", config, tableName, constraintName, constraintAction });
+  const data = await res.json();
+  return data.success
+    ? { ok: true, message: data.message }
+    : { ok: false, error: data.error };
+}
+
 export async function getSessions(
   config: OracleConfig
 ): Promise<{ ok: boolean; sessions?: OracleSession[]; error?: string }> {

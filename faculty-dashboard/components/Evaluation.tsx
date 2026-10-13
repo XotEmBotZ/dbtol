@@ -105,23 +105,30 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
             name: c.COLUMN_NAME,
             type: c.DATA_TYPE,
             nullable: c.NULLABLE === "Y",
+            dataLength: c.DATA_LENGTH,
+            charLength: c.CHAR_LENGTH,
+            charUsed: c.CHAR_USED,
+            precision: c.DATA_PRECISION ?? null,
+            scale: c.DATA_SCALE ?? null,
+            defaultValue: c.DATA_DEFAULT ?? null,
+            identity: c.IDENTITY_COLUMN === "YES",
+            virtual: c.VIRTUAL_COLUMN === "YES",
           }));
 
-          // Map constraints (deduplicating by name)
-          const seenCons = new Set<string>();
-          const cons: BenchmarkTableRule["constraints"] = [];
-          for (const c of s.constraints) {
-            if (!seenCons.has(c.CONSTRAINT_NAME)) {
-              seenCons.add(c.CONSTRAINT_NAME);
-              cons.push({
-                name: c.CONSTRAINT_NAME,
-                type: c.CONSTRAINT_TYPE,
-                column: c.COLUMN_NAME,
-                rTable: c.R_TABLE_NAME,
-                condition: c.SEARCH_CONDITION,
-              });
-            }
-          }
+          const cons: BenchmarkTableRule["constraints"] = s.constraints.map((c) => ({
+            name: c.CONSTRAINT_NAME,
+            type: c.CONSTRAINT_TYPE,
+            column: c.COLUMNS?.[0] || c.COLUMN_NAME,
+            columns: c.COLUMNS || (c.COLUMN_NAME ? [c.COLUMN_NAME] : []),
+            rTable: c.R_TABLE_NAME,
+            referencedColumns: c.REFERENCED_COLUMNS || [],
+            condition: c.SEARCH_CONDITION,
+            status: c.STATUS,
+            validated: c.VALIDATED,
+            deferrable: c.DEFERRABLE,
+            deferred: c.DEFERRED,
+            deleteRule: c.DELETE_RULE,
+          }));
 
           tableRules.push({
             tableName: t.TABLE_NAME,
@@ -241,14 +248,29 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
         // 2b. Check Columns & Types
         for (const col of expectedTable.columns) {
           const targetCol = targetColMap.get(col.name.toUpperCase());
-          const passed = !!targetCol;
+          const mismatches: string[] = [];
+          if (targetCol) {
+            if (targetCol.DATA_TYPE.toUpperCase() !== col.type.toUpperCase()) mismatches.push("type");
+            if (targetCol.NULLABLE !== (col.nullable ? "Y" : "N")) mismatches.push("nullability");
+            if (col.dataLength !== undefined && targetCol.DATA_LENGTH !== col.dataLength) mismatches.push("byte length");
+            if (col.charLength !== undefined && targetCol.CHAR_LENGTH !== col.charLength) mismatches.push("character length");
+            if (col.charUsed !== undefined && targetCol.CHAR_USED !== col.charUsed) mismatches.push("BYTE/CHAR semantics");
+            if (col.precision !== undefined && (targetCol.DATA_PRECISION ?? null) !== col.precision) mismatches.push("precision");
+            if (col.scale !== undefined && (targetCol.DATA_SCALE ?? null) !== col.scale) mismatches.push("scale");
+            if (col.defaultValue !== undefined && (targetCol.DATA_DEFAULT || "").replace(/\s+/g, " ").trim() !== (col.defaultValue || "").replace(/\s+/g, " ").trim()) mismatches.push("default");
+            if (col.identity !== undefined && (targetCol.IDENTITY_COLUMN === "YES") !== col.identity) mismatches.push("identity");
+            if (col.virtual !== undefined && (targetCol.VIRTUAL_COLUMN === "YES") !== col.virtual) mismatches.push("virtual property");
+          }
+          const passed = !!targetCol && mismatches.length === 0;
           checks.push({
             category: "column",
             title: `${tName}.${col.name} (${col.type})`,
             passed,
             message: passed
-              ? `Column found (${targetCol?.DATA_TYPE})`
-              : `Missing column '${col.name}' in '${tName}'`,
+              ? `Column definition matches (${targetCol?.DATA_TYPE})`
+              : !targetCol
+              ? `Missing column '${col.name}' in '${tName}'`
+              : `Definition differs: ${mismatches.join(", ")}`,
             points: 2,
             earned: passed ? 2 : 0,
           });
@@ -258,36 +280,34 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
         for (const cons of expectedTable.constraints) {
           let passed = false;
           let message = "";
+          const expectedColumns = cons.columns?.length ? cons.columns : cons.column ? [cons.column] : [];
+          const normalize = (value?: string | null) => (value || "").replace(/\s+/g, " ").trim().toUpperCase();
+          const targetConstraint = targetCons.find((candidate) => {
+            const actualColumns = candidate.COLUMNS || (candidate.COLUMN_NAME ? [candidate.COLUMN_NAME] : []);
+            return candidate.CONSTRAINT_TYPE === cons.type &&
+              (!expectedColumns.length || actualColumns.length === expectedColumns.length &&
+                actualColumns.every((column, i) => column.toUpperCase() === expectedColumns[i].toUpperCase()));
+          });
 
-          if (cons.type === "P") {
-            // Primary Key check
-            const pk = targetCons.find((c) => c.CONSTRAINT_TYPE === "P");
-            passed = !!pk && (!cons.column || pk.COLUMN_NAME?.toUpperCase() === cons.column.toUpperCase());
-            message = passed ? `Primary key verified on ${pk?.COLUMN_NAME || "column"}` : `Missing Primary Key on '${tName}'`;
-          } else if (cons.type === "R") {
-            // Foreign Key check
-            const fk = targetCons.find(
-              (c) =>
-                c.CONSTRAINT_TYPE === "R" &&
-                (!cons.column || c.COLUMN_NAME?.toUpperCase() === cons.column.toUpperCase()) &&
-                (!cons.rTable || c.R_TABLE_NAME?.toUpperCase() === cons.rTable.toUpperCase())
-            );
-            passed = !!fk;
-            message = passed
-              ? `Foreign key verified $\to$ ${fk?.R_TABLE_NAME || "referenced table"}`
-              : `Missing Foreign Key referencing '${cons.rTable || "table"}' on '${cons.column || "column"}'`;
-          } else if (cons.type === "U") {
-            // Unique check
-            const uq = targetCons.find(
-              (c) => c.CONSTRAINT_TYPE === "U" && (!cons.column || c.COLUMN_NAME?.toUpperCase() === cons.column.toUpperCase())
-            );
-            passed = !!uq;
-            message = passed ? "Unique constraint verified" : `Missing UNIQUE constraint on '${cons.column || "column"}'`;
+          if (!targetConstraint) {
+            message = `Missing ${getConstraintLabel(cons.type)} on ${expectedColumns.join(", ") || tName}`;
           } else {
-            // Check constraint
-            const ck = targetCons.find((c) => c.CONSTRAINT_TYPE === "C" && (!cons.column || c.COLUMN_NAME?.toUpperCase() === cons.column.toUpperCase()));
-            passed = !!ck;
-            message = passed ? "Check constraint verified" : `Missing CHECK constraint on '${cons.column || "column"}'`;
+            const actualReferenced = targetConstraint.REFERENCED_COLUMNS || [];
+            const expectedReferenced = cons.referencedColumns || [];
+            const matches =
+              (!cons.rTable || targetConstraint.R_TABLE_NAME?.toUpperCase() === cons.rTable.toUpperCase()) &&
+              (!expectedReferenced.length || actualReferenced.length === expectedReferenced.length &&
+                actualReferenced.every((column, i) => column.toUpperCase() === expectedReferenced[i].toUpperCase())) &&
+              (!cons.condition || normalize(targetConstraint.SEARCH_CONDITION) === normalize(cons.condition)) &&
+              (!cons.status || targetConstraint.STATUS === cons.status) &&
+              (!cons.validated || targetConstraint.VALIDATED === cons.validated) &&
+              (!cons.deferrable || targetConstraint.DEFERRABLE === cons.deferrable) &&
+              (!cons.deferred || targetConstraint.DEFERRED === cons.deferred) &&
+              (!cons.deleteRule || targetConstraint.DELETE_RULE === cons.deleteRule);
+            passed = matches;
+            message = matches
+              ? `Constraint verified: ${expectedColumns.join(", ") || tName}`
+              : `Constraint properties differ (state ${targetConstraint.STATUS}/${targetConstraint.VALIDATED})`;
           }
 
           checks.push({
@@ -514,7 +534,7 @@ export function Evaluation({ config, node, nodes = [] }: EvaluationProps) {
                       </div>
                       <div>
                         <span className="font-bold text-neutral-500">Constraints:</span>{" "}
-                        {t.constraints.map((c) => `${getConstraintLabel(c.type)} (${c.column || c.name})`).join(", ") || "None"}
+                        {t.constraints.map((c) => `${getConstraintLabel(c.type)} (${c.columns?.join(", ") || c.column || c.name})`).join(", ") || "None"}
                       </div>
                     </div>
                   </div>
