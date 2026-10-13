@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, Key, Link2, ShieldCheck, CheckCircle2, ChevronRight, Loader2, TableProperties, ArrowLeft, Terminal } from "lucide-react";
+import { RefreshCw, Key, Link2, ShieldCheck, CheckCircle2, Loader2, TableProperties, ArrowLeft, Terminal } from "lucide-react";
 import type { OracleConfig, SchemaTable, TableSchemaDetail, StatusMessage } from "@/lib/types";
-import { getTables, getTableSchema } from "@/lib/oracle";
+import { getTables, getTableSchema, updateConstraint } from "@/lib/oracle";
 import { StatusBar } from "@/components/StatusBar";
 
 interface SchemaExplorerProps {
@@ -23,6 +23,7 @@ export function SchemaExplorer({ config, onQueryTable }: SchemaExplorerProps) {
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableSchema, setTableSchema] = useState<TableSchemaDetail | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
+  const [updatingConstraint, setUpdatingConstraint] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -55,6 +56,23 @@ export function SchemaExplorer({ config, onQueryTable }: SchemaExplorerProps) {
       setTableSchema(null);
       setStatus({ text: resp.error ?? `Failed to load schema for ${tableName}`, ok: false, type: "error" });
     }
+  };
+
+  const changeConstraint = async (
+    constraintName: string,
+    action: "ENABLE VALIDATE" | "ENABLE NOVALIDATE" | "DISABLE"
+  ) => {
+    if (!selectedTable) return;
+    if (!window.confirm(`${action} constraint ${constraintName} on ${selectedTable}?`)) return;
+    setUpdatingConstraint(constraintName);
+    const result = await updateConstraint(config, selectedTable, constraintName, action);
+    setUpdatingConstraint(null);
+    if (!result.ok) {
+      setStatus({ text: result.error || "Constraint update failed", ok: false, type: "error" });
+      return;
+    }
+    setStatus({ text: result.message || "Constraint updated", ok: true, type: "success" });
+    await inspectTable(selectedTable);
   };
 
   // Load lazily on first mount
@@ -187,22 +205,19 @@ export function SchemaExplorer({ config, onQueryTable }: SchemaExplorerProps) {
                         <thead className="bg-neutral-100 text-neutral-700 text-[10px] uppercase font-bold border-b border-neutral-200">
                           <tr>
                             <th className="px-3 py-2 text-left border-r border-neutral-200">Column Name</th>
-                            <th className="px-3 py-2 text-left border-r border-neutral-200">Data Type</th>
+                            <th className="px-3 py-2 text-left border-r border-neutral-200">Type / Size</th>
                             <th className="px-3 py-2 text-center border-r border-neutral-200">Nullable</th>
-                            <th className="px-3 py-2 text-left">Default Value</th>
+                            <th className="px-3 py-2 text-left border-r border-neutral-200">Default / Expression</th>
+                            <th className="px-3 py-2 text-left">Column Properties</th>
                           </tr>
                         </thead>
                         <tbody>
                           {tableSchema.columns.map((c, i) => (
                             <tr key={i} className="border-b border-neutral-100 hover:bg-neutral-50">
                               <td className="px-3 py-1.5 font-bold text-neutral-900 border-r border-neutral-200">{c.COLUMN_NAME}</td>
-                              <td className="px-3 py-1.5 text-blue-700 border-r border-neutral-200">
-                                {c.DATA_TYPE}
-                                {c.DATA_PRECISION != null
-                                  ? `(${c.DATA_PRECISION},${c.DATA_SCALE || 0})`
-                                  : c.DATA_LENGTH && !["NUMBER", "DATE", "TIMESTAMP"].some(t => c.DATA_TYPE.includes(t))
-                                  ? `(${c.DATA_LENGTH})`
-                                  : ""}
+                              <td className="px-3 py-1.5 text-blue-700 border-r border-neutral-200 whitespace-nowrap">
+                                <div>{c.DATA_TYPE}{c.DATA_PRECISION != null ? `(${c.DATA_PRECISION}${c.DATA_SCALE != null ? `,${c.DATA_SCALE}` : ""})` : c.CHAR_LENGTH ? `(${c.CHAR_LENGTH} ${c.CHAR_USED === "C" ? "CHAR" : "BYTE"})` : ""}</div>
+                                {c.DATA_LENGTH != null && c.CHAR_LENGTH != null && <div className="text-[9px] text-neutral-400">{c.DATA_LENGTH} bytes</div>}
                               </td>
                               <td className="px-3 py-1.5 text-center border-r border-neutral-200">
                                 {c.NULLABLE === "Y" ? (
@@ -211,7 +226,14 @@ export function SchemaExplorer({ config, onQueryTable }: SchemaExplorerProps) {
                                   <span className="text-red-700 font-bold text-[9px]">NOT NULL</span>
                                 )}
                               </td>
-                              <td className="px-3 py-1.5 text-neutral-600 truncate max-w-xs">{c.DATA_DEFAULT || "—"}</td>
+                              <td className="px-3 py-1.5 text-neutral-600 max-w-xs break-words border-r border-neutral-200">{c.DATA_DEFAULT || "—"}</td>
+                              <td className="px-3 py-1.5 text-[9px] text-neutral-600">
+                                <div className="flex flex-wrap gap-1">
+                                  {c.IDENTITY_COLUMN === "YES" && <span className="px-1 border border-indigo-300 bg-indigo-50 text-indigo-800">IDENTITY</span>}
+                                  {c.VIRTUAL_COLUMN === "YES" && <span className="px-1 border border-violet-300 bg-violet-50 text-violet-800">VIRTUAL</span>}
+                                  {!c.IDENTITY_COLUMN && !c.VIRTUAL_COLUMN && <span>—</span>}
+                                </div>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -235,9 +257,10 @@ export function SchemaExplorer({ config, onQueryTable }: SchemaExplorerProps) {
                             <tr>
                               <th className="px-3 py-2 text-left border-r border-neutral-200">Constraint Name</th>
                               <th className="px-3 py-2 text-left border-r border-neutral-200">Type</th>
-                              <th className="px-3 py-2 text-left border-r border-neutral-200">Column</th>
+                              <th className="px-3 py-2 text-left border-r border-neutral-200">Columns</th>
                               <th className="px-3 py-2 text-left border-r border-neutral-200">References / Target</th>
-                              <th className="px-3 py-2 text-left">Condition / Rule</th>
+                              <th className="px-3 py-2 text-left border-r border-neutral-200">Enforcement / Rule</th>
+                              <th className="px-3 py-2 text-left">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -245,12 +268,24 @@ export function SchemaExplorer({ config, onQueryTable }: SchemaExplorerProps) {
                               <tr key={i} className="border-b border-neutral-100 hover:bg-neutral-50">
                                 <td className="px-3 py-1.5 font-bold text-neutral-900 border-r border-neutral-200">{c.CONSTRAINT_NAME}</td>
                                 <td className="px-3 py-1.5 border-r border-neutral-200">{getConstraintBadge(c.CONSTRAINT_TYPE)}</td>
-                                <td className="px-3 py-1.5 text-neutral-800 font-bold border-r border-neutral-200">{c.COLUMN_NAME || "—"}</td>
+                                <td className="px-3 py-1.5 text-neutral-800 font-bold border-r border-neutral-200">{c.COLUMNS?.join(", ") || c.COLUMN_NAME || "—"}</td>
                                 <td className="px-3 py-1.5 text-blue-700 border-r border-neutral-200">
-                                  {c.R_TABLE_NAME ? `${c.R_TABLE_NAME} (${c.R_CONSTRAINT_NAME})` : "—"}
+                                  {c.R_TABLE_NAME ? `${c.R_TABLE_NAME} (${c.REFERENCED_COLUMNS?.join(", ") || c.R_CONSTRAINT_NAME})` : "—"}
                                 </td>
-                                <td className="px-3 py-1.5 text-neutral-600 text-[10px]">
-                                  {c.SEARCH_CONDITION || (c.DELETE_RULE ? `ON DELETE ${c.DELETE_RULE}` : "—")}
+                                <td className="px-3 py-1.5 text-neutral-600 text-[10px] border-r border-neutral-200">
+                                  <div className="font-bold">{c.STATUS || "UNKNOWN"} / {c.VALIDATED || "UNKNOWN"}</div>
+                                  <div>{c.DEFERRABLE || "NOT DEFERRABLE"}{c.DEFERRABLE === "DEFERRABLE" ? ` · ${c.DEFERRED || "IMMEDIATE"}` : ""}</div>
+                                  {c.SEARCH_CONDITION && <div>{c.SEARCH_CONDITION}</div>}
+                                  {c.DELETE_RULE && <div>ON DELETE {c.DELETE_RULE}</div>}
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <div className="flex flex-col gap-1 min-w-32">
+                                    {(["ENABLE VALIDATE", "ENABLE NOVALIDATE", "DISABLE"] as const).map((action) => (
+                                      <button key={action} onClick={() => changeConstraint(c.CONSTRAINT_NAME, action)} disabled={updatingConstraint === c.CONSTRAINT_NAME || !(config.asSysdba || ["SYS", "SYSTEM"].includes(config.user.toUpperCase()))} className="px-1.5 py-0.5 text-[8px] font-bold border border-neutral-300 hover:bg-neutral-100 disabled:opacity-40 text-left">
+                                        {updatingConstraint === c.CONSTRAINT_NAME ? "UPDATING..." : action}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
