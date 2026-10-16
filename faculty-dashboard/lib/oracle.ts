@@ -1,4 +1,13 @@
-import type { OracleConfig, QueryResult, SchemaTable, OracleSession, TableSchemaDetail } from "./types";
+
+import type {
+  OracleConfig,
+  QueryResult,
+  SchemaTable,
+  OracleSession,
+  TableSchemaDetail,
+  BenchmarkAdvancedObjects,
+} from "./types";
+
 
 const ORACLE_ENDPOINT = "/api/oracle";
 
@@ -109,5 +118,25 @@ export async function resetStudentAccount(
   if (data.success) {
     return { ok: true, message: data.message };
   }
+  return { ok: false, error: data.error };
+}
+
+export async function getAdvancedObjects(
+  config: OracleConfig
+): Promise<{
+  ok: boolean;
+  objects?: BenchmarkAdvancedObjects;
+  error?: string;
+}> {
+  const res = await post({ action: "get-advanced-objects", config });
+  const data = await res.json();
+
+  if (data.success) {
+    return {
+      ok: true,
+      objects: data.objects as BenchmarkAdvancedObjects,
+    };
+  }
+
   return { ok: false, error: data.error };
 }

@@ -1,3 +1,4 @@
+
 export interface OracleConfig {
   host: string;
   port: number;
@@ -114,6 +115,7 @@ export interface BenchmarkConfig {
   sourceNode: string;
   capturedAt: string;
   tables: BenchmarkTableRule[];
+  advancedObjects?: BenchmarkAdvancedObjects;
 }
 
 export interface OracleSession {
@@ -129,11 +131,78 @@ export interface OracleSession {
   SQL_TEXT?: string;
 }
 
-export type ActiveView = "health" | "sql" | "schema" | "sessions" | "evaluation";
+export type ActiveView =
+  | "health"
+  | "sql"
+  | "schema"
+  | "sessions"
+  | "evaluation";
 
 export interface StatusMessage {
   text: string;
   ok: boolean;
   type?: "success" | "error" | "info" | "loading";
   code?: number | string;
+}
+
+
+export interface BenchmarkIndexRule {
+  name: string;
+  tableName: string;
+  indexType: string;
+  uniqueness: string;
+  columns: string[];
+  expressions?: string[];
+  status?: string;
+  visibility?: string;
+}
+
+export interface BenchmarkViewRule {
+  name: string;
+  text?: string;
+  readOnly?: boolean;
+}
+
+export interface BenchmarkMaterializedViewRule {
+  name: string;
+  refreshMode: string;
+  refreshMethod: string;
+  buildMode: string;
+  rewriteEnabled: string;
+  staleness?: string;
+  compileState?: string;
+}
+
+export interface BenchmarkSequenceRule {
+  name: string;
+  minValue: string;
+  maxValue: string;
+  incrementBy: number;
+  cycleFlag: string;
+  orderFlag: string;
+  cacheSize: number;
+}
+
+export interface BenchmarkSynonymRule {
+  name: string;
+  owner: string;
+  tableOwner: string;
+  tableName: string;
+  dbLink?: string;
+}
+
+export interface BenchmarkDatabaseLinkRule {
+  name: string;
+  owner: string;
+  username?: string;
+  host?: string;
+}
+
+export interface BenchmarkAdvancedObjects {
+  indexes: BenchmarkIndexRule[];
+  views: BenchmarkViewRule[];
+  materializedViews: BenchmarkMaterializedViewRule[];
+  sequences: BenchmarkSequenceRule[];
+  synonyms: BenchmarkSynonymRule[];
+  databaseLinks: BenchmarkDatabaseLinkRule[];
 }

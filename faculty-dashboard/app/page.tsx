@@ -252,13 +252,13 @@ export default function FacultyDashboard() {
               {activeView === "health" && (
                 <DatabaseHealth config={config} node={nodes.find(n => n.id === selectedNodeId)} />
               )}
-              {activeView === "evaluation" && (
+              <div style={{ display: activeView === "evaluation" ? "block" : "none" }}>
                 <Evaluation
                   config={config}
                   node={nodes.find(n => n.id === selectedNodeId)}
                   nodes={nodes}
                 />
-              )}
+              </div>
               {activeView === "sql" && (
                 <SQLRunner
                   key={sqlRunnerKey.current}
