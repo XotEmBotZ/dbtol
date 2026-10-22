@@ -136,7 +136,49 @@ export type ActiveView =
   | "sql"
   | "schema"
   | "sessions"
-  | "evaluation";
+  | "evaluation"
+  | "students"
+  | "evaluations_history";
+
+export interface StudentRecord {
+  id: string;
+  regNo: string;
+  name: string;
+  email?: string;
+  targetNodeId?: string;
+  targetIp?: string;
+  targetPort?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StudentEvaluationRecord {
+  id: string;
+  studentId: string;
+  studentRegNo: string;
+  studentName: string;
+  nodeId: string;
+  hostname: string;
+  targetIp: string;
+  targetPort: number;
+  benchmarkName: string;
+  totalPoints: number;
+  earnedPoints: number;
+  scorePercentage: number;
+  status: "PASSED" | "PARTIAL" | "FAILED" | "ERROR";
+  errorMessage?: string;
+  checks: Array<{
+    category: string;
+    title: string;
+    passed: boolean;
+    points: number;
+    earned: number;
+    message?: string;
+  }>;
+  evaluatedAt: string;
+  evaluatedBy?: string;
+}
 
 export interface StatusMessage {
   text: string;

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "stu-1",
+    "regNo": "21BCE1001",
+    "name": "Arun Kumar",
+    "email": "arun.kumar@vitstudent.ac.in",
+    "targetNodeId": "node-10-0-1-101",
+    "targetIp": "127.0.0.1",
+    "targetPort": 1522,
+    "notes": "PC 01",
+    "createdAt": "2026-10-22T04:58:21.351Z",
+    "updatedAt": "2026-10-22T05:04:40.367Z"
+  },
+  {
+    "id": "stu-2",
+    "regNo": "21BCE1002",
+    "name": "Bhavna Patel",
+    "email": "bhavna.patel@vitstudent.ac.in",
+    "targetNodeId": "node-10-0-1-102",
+    "targetIp": "127.0.0.1",
+    "targetPort": 1523,
+    "notes": "PC 02",
+    "createdAt": "2026-10-22T04:58:21.362Z",
+    "updatedAt": "2026-10-22T05:04:40.367Z"
+  },
+  {
+    "id": "stu-1792645480367-hh4i",
+    "regNo": "21BCE1003",
+    "name": "Charlie Brown",
+    "targetIp": "127.0.0.1",
+    "targetPort": 1524,
+    "notes": "PC 03",
+    "createdAt": "2026-10-22T05:04:40.368Z"
+  },
+  {
+    "id": "stu-1792645480368-6e8x",
+    "regNo": "21BCE1004",
+    "name": "Divya Sharma",
+    "targetIp": "127.0.0.1",
+    "targetPort": 1525,
+    "notes": "PC 04",
+    "createdAt": "2026-10-22T05:04:40.368Z"
+  },
+  {
+    "id": "stu-1792645480368-qcc5",
+    "regNo": "21BCE1005",
+    "name": "Ehsan Ali",
+    "targetIp": "127.0.0.1",
+    "targetPort": 1526,
+    "notes": "PC 05",
+    "createdAt": "2026-10-22T05:04:40.368Z"
+  }
+]

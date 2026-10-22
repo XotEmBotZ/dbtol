@@ -40,10 +40,9 @@ import {
 
 interface EvaluationProps {
   config: OracleConfig;
-
   node: DiscoveredNode | undefined;
-
   nodes?: DiscoveredNode[];
+  onViewRecordDetail?: (evalId: string) => void;
 }
 
 interface ItemCheckResult {
@@ -99,10 +98,9 @@ interface NodeEvaluationResult {
 
 export function Evaluation({
   config,
-
   node,
-
   nodes = [],
+  onViewRecordDetail,
 }: EvaluationProps) {
   // ------------------------------------------------------------
 
@@ -1181,6 +1179,50 @@ export function Evaluation({
       }
 
       setResults(evaluationResults);
+
+      // Auto-persist evaluation records into database storage
+      try {
+        const studentsResp = await fetch("/api/students");
+        const studentsData = await studentsResp.json();
+        const studentList = studentsData?.students || [];
+
+        const batchToSave = evaluationResults.map((r) => {
+          // Find matching student by node IP or ID
+          const matchedStu = studentList.find(
+            (s: any) =>
+              (s.targetIp && s.targetIp === r.dbIp) ||
+              (s.targetNodeId && s.targetNodeId === r.nodeId) ||
+              s.targetIp === r.ip
+          );
+
+          return {
+            studentId: matchedStu?.id || `stu-${r.nodeId}`,
+            studentRegNo: matchedStu?.regNo || r.hostname,
+            studentName: matchedStu?.name || `Student (${r.hostname})`,
+            nodeId: r.nodeId,
+            hostname: r.hostname,
+            targetIp: r.dbIp || r.ip,
+            targetPort: r.dbPort,
+            benchmarkName: benchmark.name || "Default Benchmark",
+            totalPoints: r.totalPoints,
+            earnedPoints: r.earnedPoints,
+            scorePercentage: r.scorePercentage,
+            status: r.status,
+            errorMessage: r.errorMessage,
+            checks: r.checks,
+            evaluatedAt: new Date().toISOString(),
+            evaluatedBy: config.user || "FACULTY",
+          };
+        });
+
+        await fetch("/api/evaluations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchEvaluations: batchToSave }),
+        });
+      } catch (saveErr) {
+        console.error("Failed to persist evaluation records:", saveErr);
+      }
     } finally {
       setEvaluating(false);
 

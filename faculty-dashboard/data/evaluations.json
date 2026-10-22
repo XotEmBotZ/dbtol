@@ -1,0 +1,37 @@
+[
+  {
+    "studentId": "stu-1",
+    "studentRegNo": "21BCE1001",
+    "studentName": "Arun Kumar",
+    "nodeId": "node-10-0-1-101",
+    "hostname": "STUDENT_DB_101",
+    "targetIp": "10.0.1.101",
+    "targetPort": 1521,
+    "benchmarkName": "Lab 3 - Tables & Constraints",
+    "totalPoints": 100,
+    "earnedPoints": 95,
+    "scorePercentage": 95,
+    "status": "PASSED",
+    "checks": [
+      {
+        "category": "table",
+        "title": "STUDENT Table Exists",
+        "passed": true,
+        "points": 10,
+        "earned": 10,
+        "message": "Found"
+      },
+      {
+        "category": "pk",
+        "title": "STUDENT PK Constraint",
+        "passed": true,
+        "points": 10,
+        "earned": 10,
+        "message": "Enforced"
+      }
+    ],
+    "evaluatedAt": "2026-10-22T04:58:30.000Z",
+    "evaluatedBy": "FACULTY",
+    "id": "eval-1792645116991-gs3vu"
+  }
+]

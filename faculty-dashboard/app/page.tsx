@@ -1,23 +1,27 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { OracleConfig, DiscoveredNode, ActiveView, StatusMessage } from "@/lib/types";
+import type { OracleConfig, DiscoveredNode, ActiveView, StatusMessage, StudentRecord } from "@/lib/types";
 import { fetchNodes } from "@/lib/nodes";
 import { pingOracle } from "@/lib/oracle";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
-import { SQLRunner } from "@/components/SQLRunner";
-import { SchemaExplorer } from "@/components/SchemaExplorer";
-import { ActiveSessions } from "@/components/ActiveSessions";
+import { DatabaseToolsPage } from "@/components/DatabaseToolsPage";
 import { StatusBar } from "@/components/StatusBar";
-import { DatabaseHealth } from "@/components/DatabaseHealth";
 import { Evaluation } from "@/components/Evaluation";
+import { StudentsManager } from "@/components/StudentsManager";
+import { EvaluationHistory } from "@/components/EvaluationHistory";
+import { NodeSelectModal } from "@/components/NodeSelectModal";
 
 export default function FacultyDashboard() {
   // ── Node state ──────────────────────────────────────────────────────────────
   const [nodes, setNodes] = useState<DiscoveredNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [nodesLoading, setNodesLoading] = useState(false);
+  const [nodeModalOpen, setNodeModalOpen] = useState(false);
+
+  // ── Students state for occupancy tracking ───────────────────────────────────
+  const [students, setStudents] = useState<StudentRecord[]>([]);
 
   // ── Oracle connection config ─────────────────────────────────────────────────
   const [config, setConfig] = useState<OracleConfig>({
@@ -29,8 +33,9 @@ export default function FacultyDashboard() {
     asSysdba: true,
   });
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
-  const [activeView, setActiveView] = useState<ActiveView>("health");
+  // ── Navigation (default to student evaluation) ────────────────────────────────
+  const [activeView, setActiveView] = useState<ActiveView>("evaluation");
+  const [selectedEvalDetailId, setSelectedEvalDetailId] = useState<string | undefined>(undefined);
 
   // ── Global status (ping, rescan, node select) ────────────────────────────────
   const [globalStatus, setGlobalStatus] = useState<StatusMessage | null>(null);
@@ -65,6 +70,15 @@ export default function FacultyDashboard() {
 
   useEffect(() => {
     loadNodes();
+    // Fetch students list for seating occupancy
+    fetch("/api/students")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.students) {
+          setStudents(data.students);
+        }
+      })
+      .catch(() => {});
   }, [loadNodes]);
 
   // ── Node selection ───────────────────────────────────────────────────────────
@@ -137,10 +151,25 @@ export default function FacultyDashboard() {
   // ── Sidebar navigation ────────────────────────────────────────────────────────
   const handleNavigate = useCallback((view: ActiveView) => {
     setActiveView(view);
-    // Clear pending SQL when navigating away from sql runner manually
-    if (view !== "sql") {
-      setPendingSql(undefined);
+  }, []);
+
+  const handleSelectStudentForEval = useCallback((student: StudentRecord) => {
+    if (student.targetIp) {
+      setConfig((prev) => ({
+        ...prev,
+        host: student.targetIp!,
+        port: student.targetPort || prev.port,
+      }));
     }
+    if (student.targetNodeId) {
+      setSelectedNodeId(student.targetNodeId);
+    }
+    setActiveView("evaluation");
+  }, []);
+
+  const handleViewRecordDetail = useCallback((evalId: string) => {
+    setSelectedEvalDetailId(evalId);
+    setActiveView("evaluations_history");
   }, []);
 
   // ── Mobile sidebar toggle ─────────────────────────────────────────────────────
@@ -169,8 +198,8 @@ export default function FacultyDashboard() {
           selectedNodeId={selectedNodeId}
           nodesLoading={nodesLoading}
           activeView={activeView}
-          onSelectNode={handleSelectNode}
-          onRescan={loadNodes}
+          students={students}
+          onOpenNodeModal={() => setNodeModalOpen(true)}
           onNavigate={handleNavigate}
         />
       </div>
@@ -249,40 +278,55 @@ export default function FacultyDashboard() {
           {/* Workspace panel */}
           <div className="h-full overflow-hidden bg-white">
             <div className="h-full overflow-auto bg-white border-r border-neutral-200">
-              {activeView === "health" && (
-                <DatabaseHealth config={config} node={nodes.find(n => n.id === selectedNodeId)} />
-              )}
+              {/* 1. Evaluation Runner */}
               <div style={{ display: activeView === "evaluation" ? "block" : "none" }}>
                 <Evaluation
                   config={config}
-                  node={nodes.find(n => n.id === selectedNodeId)}
+                  node={nodes.find((n) => n.id === selectedNodeId)}
                   nodes={nodes}
+                  onViewRecordDetail={handleViewRecordDetail}
                 />
               </div>
-              {activeView === "sql" && (
-                <SQLRunner
-                  key={sqlRunnerKey.current}
-                  config={config}
-                  initialQuery={pendingSql}
+
+              {/* 2. Detailed View & Evaluation Records */}
+              {activeView === "evaluations_history" && (
+                <EvaluationHistory
+                  initialEvaluationId={selectedEvalDetailId}
+                  onBackToEvaluation={() => setActiveView("evaluation")}
                 />
               )}
-              {activeView === "schema" && (
-                <SchemaExplorer
-                  key={`schema-${config.host}`}
-                  config={config}
-                  onQueryTable={handleQueryTable}
+
+              {/* 3. Students Directory / Upload / Edit */}
+              {activeView === "students" && (
+                <StudentsManager
+                  nodes={nodes}
+                  onSelectStudentForEval={handleSelectStudentForEval}
                 />
               )}
-              {activeView === "sessions" && (
-                <ActiveSessions
-                  key={`sessions-${config.host}`}
+
+              {/* 4. Dedicated DB-Specific Page (Health, Schema, SQL Runner, Sessions) */}
+              {activeView === "health" && (
+                <DatabaseToolsPage
                   config={config}
+                  selectedNode={nodes.find((n) => n.id === selectedNodeId)}
                 />
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Node Selection & Occupancy Modal */}
+      <NodeSelectModal
+        isOpen={nodeModalOpen}
+        onClose={() => setNodeModalOpen(false)}
+        nodes={nodes}
+        selectedNodeId={selectedNodeId}
+        students={students}
+        nodesLoading={nodesLoading}
+        onRescan={loadNodes}
+        onSelectNode={handleSelectNode}
+      />
     </div>
   );
 }

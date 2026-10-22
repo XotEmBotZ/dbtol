@@ -6,7 +6,7 @@ import type { DiscoveredNode } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const TARGET_PORTS = [1521, 1522];
+const TARGET_PORTS = [1521, 1522, 1523, 1524, 1525, 1526];
 const PROBE_TIMEOUT_MS = 350;
 
 function checkPort(host: string, port: number, timeout = PROBE_TIMEOUT_MS): Promise<number | null> {
@@ -95,6 +95,26 @@ export async function GET() {
     }
   } catch (err) {
     console.error("Subnet sweep error:", err);
+  }
+
+  // Check localhost testing ports
+  const localTestingPorts = [1522, 1523, 1524, 1525, 1526];
+  for (const p of localTestingPorts) {
+    const open = await checkPort("127.0.0.1", p);
+    if (open) {
+      const idx = p - 1521;
+      nodes.push({
+        id: `node-local-${p}`,
+        hostname: `STUDENT_NODE_0${idx}`,
+        role: "worker",
+        ip: "127.0.0.1",
+        status: "ready",
+        dbIp: "127.0.0.1",
+        dbPort: p,
+        dbStatus: "online",
+        dbContainerName: `student-node-0${idx}`,
+      });
+    }
   }
 
   // Fallback if no remote DB instances responded

@@ -1,16 +1,15 @@
 "use client";
 
-import { RefreshCw, Activity, Terminal, Database, Users, GraduationCap } from "lucide-react";
-import type { DiscoveredNode, ActiveView } from "@/lib/types";
-import { NodeCard } from "@/components/NodeCard";
+import { Activity, GraduationCap, UserCheck, History, Server, ChevronRight } from "lucide-react";
+import type { DiscoveredNode, ActiveView, StudentRecord } from "@/lib/types";
 
 interface SidebarProps {
   nodes: DiscoveredNode[];
   selectedNodeId: string;
   nodesLoading: boolean;
   activeView: ActiveView;
-  onSelectNode: (node: DiscoveredNode) => void;
-  onRescan: () => void;
+  students?: StudentRecord[];
+  onOpenNodeModal: () => void;
   onNavigate: (view: ActiveView) => void;
 }
 
@@ -20,63 +19,75 @@ const NAV_ITEMS: {
   icon: React.ElementType;
   disabled?: boolean;
 }[] = [
-  { id: "health", label: "HEALTH", icon: Activity },
-  { id: "schema", label: "SCHEMA", icon: Database },
-  { id: "sql", label: "SQL RUNNER", icon: Terminal },
-  { id: "sessions", label: "SESSIONS", icon: Users },
-  { id: "evaluation", label: "EVALUATION", icon: GraduationCap },
+  { id: "evaluation", label: "EVALUATE STUDENTS", icon: GraduationCap },
+  { id: "evaluations_history", label: "EVAL RECORDS", icon: History },
+  { id: "students", label: "STUDENTS DIRECTORY", icon: UserCheck },
+  { id: "health", label: "DB WORKSPACE", icon: Activity },
 ];
 
 export function Sidebar({
   nodes,
   selectedNodeId,
-  nodesLoading,
   activeView,
-  onSelectNode,
-  onRescan,
+  students = [],
+  onOpenNodeModal,
   onNavigate,
 }: SidebarProps) {
-  return (
-    <aside className="w-60 shrink-0 flex flex-col bg-neutral-950 border-r border-neutral-800 overflow-hidden h-full">
-      {/* Node Section Header */}
-      <div className="px-3 pt-3 pb-2 border-b border-neutral-800">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 font-mono">
-            [SWARM_STUDENT_NODES]
-          </span>
-          <button
-            onClick={onRescan}
-            disabled={nodesLoading}
-            title="Rescan Swarm"
-            className="p-1 text-neutral-500 hover:text-white disabled:opacity-40 transition-colors"
-          >
-            <RefreshCw className={`w-3 h-3 ${nodesLoading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  const selectedOccupant = selectedNode
+    ? students.find(
+        (s) =>
+          (s.targetNodeId && s.targetNodeId === selectedNode.id) ||
+          (s.targetIp &&
+            (s.targetIp === selectedNode.dbIp || s.targetIp === selectedNode.ip) &&
+            (s.targetPort ? s.targetPort === selectedNode.dbPort : true))
+      )
+    : undefined;
 
-      {/* Node List */}
-      <div className="overflow-y-auto border-b border-neutral-800" style={{ maxHeight: "52%" }}>
-        {nodes.length === 0 && !nodesLoading && (
-          <div className="px-3 py-4 text-[10px] text-neutral-600 font-mono uppercase">
-            No nodes discovered.
-          </div>
-        )}
-        {nodesLoading && (
-          <div className="px-3 py-4 text-[10px] text-neutral-600 font-mono uppercase animate-pulse">
-            Scanning swarm...
-          </div>
-        )}
-        <div className="p-2 space-y-1">
-          {nodes.map((node) => (
-            <NodeCard
-              key={node.id}
-              node={node}
-              isSelected={node.id === selectedNodeId}
-              onClick={() => onSelectNode(node)}
-            />
-          ))}
+  return (
+    <aside className="w-64 shrink-0 flex flex-col bg-neutral-950 border-r border-neutral-800 overflow-hidden h-full">
+      {/* Active Node Selection Tile */}
+      <div className="p-3 border-b border-neutral-800 bg-neutral-900/60">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 font-mono">
+            ACTIVE TARGET NODE
+          </span>
+          <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {nodes.length} ONLINE
+          </span>
         </div>
+
+        <button
+          onClick={onOpenNodeModal}
+          className="w-full text-left p-2.5 bg-black border border-neutral-700 hover:border-neutral-500 transition group flex items-center justify-between"
+        >
+          <div className="min-w-0 pr-2">
+            <div className="flex items-center gap-1.5">
+              <Server className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white" />
+              <span className="font-mono text-xs font-bold text-white truncate">
+                {selectedNode ? selectedNode.hostname : "No Node Selected"}
+              </span>
+            </div>
+            {selectedOccupant ? (
+              <div className="text-[10px] font-mono text-emerald-400 truncate mt-1">
+                Occupant: {selectedOccupant.regNo} ({selectedOccupant.name.split(" ")[0]})
+              </div>
+            ) : (
+              <div className="text-[10px] font-mono text-neutral-500 italic mt-1">
+                Seat Vacant / Unassigned
+              </div>
+            )}
+          </div>
+          <ChevronRight className="w-4 h-4 text-neutral-500 group-hover:text-white shrink-0" />
+        </button>
+
+        <button
+          onClick={onOpenNodeModal}
+          className="w-full mt-2 py-1.5 px-2 text-[10px] font-mono font-bold uppercase tracking-wider bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition text-center"
+        >
+          Select Node Modal ↗
+        </button>
       </div>
 
       {/* Navigation Section */}
@@ -98,31 +109,19 @@ export function Sidebar({
                 }
                 disabled={item.disabled}
                 className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-xs font-sans font-medium tracking-wide transition-none border-l-2 mb-0.5 ${
-                  item.disabled
-                    ? "text-neutral-700 border-transparent cursor-not-allowed"
-                    : isActive
-                    ? "text-white border-white bg-neutral-800"
-                    : "text-neutral-400 border-transparent hover:text-white hover:bg-neutral-900"
-                }`}
+                  isActive
+                    ? "border-white text-white bg-neutral-900"
+                    : "border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50"
+                } ${item.disabled ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
               >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                <span>{item.label}</span>
-                {item.disabled && (
-                  <span className="ml-auto text-[8px] text-neutral-700 uppercase">
-                    N/A
-                  </span>
-                )}
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-white" : "text-neutral-500"}`} />
+                <span className="font-mono text-[11px] tracking-normal font-semibold truncate">
+                  {item.label}
+                </span>
               </button>
             );
           })}
         </nav>
-      </div>
-
-      {/* Footer */}
-      <div className="px-3 py-2 border-t border-neutral-800">
-        <span className="text-[9px] text-neutral-700 font-mono uppercase">
-          dbtol // oracle 23c
-        </span>
       </div>
     </aside>
   );
